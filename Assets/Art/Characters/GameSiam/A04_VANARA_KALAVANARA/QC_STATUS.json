@@ -1,0 +1,26 @@
+{
+  "character_id": "A04_VANARA_KALAVANARA",
+  "status": "passed",
+  "cell_size": 64,
+  "actions": [
+    "idle",
+    "walk",
+    "attack_01",
+    "skill_01",
+    "hurt",
+    "death"
+  ],
+  "directions": [
+    "south",
+    "south-east",
+    "east",
+    "north-east",
+    "north",
+    "north-west",
+    "west",
+    "south-west"
+  ],
+  "visual_review": "run/game-siam-roster-40/characters/A04_VANARA_KALAVANARA/64/qa/visual-review.json",
+  "manifest_validation": "run/game-siam-roster-40/characters/A04_VANARA_KALAVANARA/64/qa/manifest-validation.json",
+  "notes": "Passed visual QC after targeted direction and frame-separation corrections. Corrected idle south-east direction, idle north-east spacing, walk south-east, attack_01 south/south-west, skill_01 clone compactness and diagonal direction drift, hurt south-east, and death south-east before final."
+}

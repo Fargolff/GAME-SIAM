@@ -1,0 +1,27 @@
+{
+  "character_id": "A05_MAKARA_MAKORNKRAM",
+  "status": "passed",
+  "cell_size": 64,
+  "actions": [
+    "idle",
+    "walk",
+    "attack_01",
+    "skill_01",
+    "hurt",
+    "death"
+  ],
+  "directions": [
+    "south",
+    "south-east",
+    "east",
+    "north-east",
+    "north",
+    "north-west",
+    "west",
+    "south-west"
+  ],
+  "manual_visual_qc": true,
+  "manifest_validation": "passed",
+  "notes": "A05 Makara vanguard tank passed manual visual QC across all six actions. Identity lock: squat sea-green Makara tank, bronze/gold trim, orange-red dorsal fins, teal gems, heavy dark anchor, short thick fish tail. Some south-west rows are intentionally side-heavy but preserve identity and remain direction-readable in contact sheets.",
+  "run_folder": "run/game-siam-roster-40/characters/A05_MAKARA_MAKORNKRAM"
+}

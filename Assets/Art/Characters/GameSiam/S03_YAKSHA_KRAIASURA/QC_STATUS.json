@@ -1,0 +1,26 @@
+{
+  "character_id": "S03_YAKSHA_KRAIASURA",
+  "status": "passed",
+  "cell_size": 64,
+  "actions": [
+    "idle",
+    "walk",
+    "attack_01",
+    "skill_01",
+    "hurt",
+    "death"
+  ],
+  "directions": [
+    "south",
+    "south-east",
+    "east",
+    "north-east",
+    "north",
+    "north-west",
+    "west",
+    "south-west"
+  ],
+  "visual_review": "run/game-siam-roster-40/characters/S03_YAKSHA_KRAIASURA/64/qa/visual-review.json",
+  "manifest_validation": "run/game-siam-roster-40/characters/S03_YAKSHA_KRAIASURA/64/qa/manifest-validation.json",
+  "notes": "Passed visual QC after per-action staging. Death rows preserve S03 identity, shield, mace, and armor."
+}

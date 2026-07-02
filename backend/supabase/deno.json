@@ -1,0 +1,8 @@
+{
+  "tasks": {
+    "test": "deno test functions/_shared/*_test.ts"
+  },
+  "compilerOptions": {
+    "strict": true
+  }
+}

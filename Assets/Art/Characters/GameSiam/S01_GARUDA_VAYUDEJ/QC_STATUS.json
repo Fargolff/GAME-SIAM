@@ -1,0 +1,13 @@
+{
+  "character_id": "S01_GARUDA_VAYUDEJ",
+  "status": "passed_after_revision",
+  "reason": "User QC rejected the original death/south-east strip. The full death action was regenerated with a stricter human-faced Garuda identity lock and passed validation/visual review.",
+  "do_not_ship": false,
+  "corrected_rows": [
+    {
+      "action": "death",
+      "direction": "all",
+      "source_path": "run/game-siam-roster-40/characters/S01_GARUDA_VAYUDEJ/source/64-death-*.png"
+    }
+  ]
+}

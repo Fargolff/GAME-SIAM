@@ -1,0 +1,66 @@
+{
+  "cell": 64,
+  "columns": 6,
+  "rows": 8,
+  "action": "skill_01",
+  "directions": [
+    "south",
+    "south-east",
+    "east",
+    "north-east",
+    "north",
+    "north-west",
+    "west",
+    "south-west"
+  ],
+  "rows_meta": [
+    {
+      "row": 0,
+      "action": "skill_01",
+      "direction": "south",
+      "frames": 6
+    },
+    {
+      "row": 1,
+      "action": "skill_01",
+      "direction": "south-east",
+      "frames": 6
+    },
+    {
+      "row": 2,
+      "action": "skill_01",
+      "direction": "east",
+      "frames": 6
+    },
+    {
+      "row": 3,
+      "action": "skill_01",
+      "direction": "north-east",
+      "frames": 6
+    },
+    {
+      "row": 4,
+      "action": "skill_01",
+      "direction": "north",
+      "frames": 6
+    },
+    {
+      "row": 5,
+      "action": "skill_01",
+      "direction": "north-west",
+      "frames": 6
+    },
+    {
+      "row": 6,
+      "action": "skill_01",
+      "direction": "west",
+      "frames": 6
+    },
+    {
+      "row": 7,
+      "action": "skill_01",
+      "direction": "south-west",
+      "frames": 6
+    }
+  ]
+}

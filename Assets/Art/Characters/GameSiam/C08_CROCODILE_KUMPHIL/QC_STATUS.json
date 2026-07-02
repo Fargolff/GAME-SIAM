@@ -1,0 +1,28 @@
+{
+  "character_id": "C08_CROCODILE_KUMPHIL",
+  "status": "passed_strict_identity_qc",
+  "cell_size": 64,
+  "actions": [
+    "idle",
+    "walk",
+    "attack_01",
+    "skill_01",
+    "hurt",
+    "death"
+  ],
+  "directions": [
+    "south",
+    "south-east",
+    "east",
+    "north-east",
+    "north",
+    "north-west",
+    "west",
+    "south-west"
+  ],
+  "visual_review": "run/game-siam-roster-40/characters/C08_CROCODILE_KUMPHIL/64/qa/visual-review.json",
+  "manifest_validation": "run/game-siam-roster-40/characters/C08_CROCODILE_KUMPHIL/64/qa/manifest-validation.json",
+  "identity_qc_board": "run/game-siam-roster-40/characters/C08_CROCODILE_KUMPHIL/64/qa/identity-qc-board.png",
+  "handoff_qc_report": "run/game-siam-roster-40/qc/qc-handoff-audit-2026-06-27.md",
+  "notes": "Accepted after strict identity QC. Canonical base, idle lock, all six action contact sheets, and identity-qc-board.png were inspected together. The character remains the same stout crocodile bruiser tank across idle, walk, attack_01, skill_01, hurt, and death: crocodile snout/head, swamp green scales, dull yellow belly/tail plates, dark brown straps, massive tail, short wooden club, compact tank scale, and low-detail pixel style stay consistent. VFX/impact marks remain small and do not hide or replace the character."
+}

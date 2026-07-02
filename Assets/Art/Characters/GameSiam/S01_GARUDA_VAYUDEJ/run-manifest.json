@@ -1,0 +1,494 @@
+{
+  "reference": {
+    "source_type": "file",
+    "source": "character-specs/S01_GARUDA_VAYUDEJ.json",
+    "used_for_generation": true,
+    "identity_notes": [
+      "Thai mythic young Garuda king, bronze gold crimson black armor, huge triangular wings, long solar spear, decisive commander sprite",
+      "ราชันครุฑหนุ่ม, เกราะไทยประยุกต์สีทองแดง แดงชาด และดำสนิท, ปีกใหญ่ทรงสามเหลี่ยม, silhouette อ่านง่ายบนมือถือ, บุคลิกสุขุมเด็ดขาด",
+      "ทวนสุริยะยาวประมาณ 1.35 เท่าความสูงตัวละคร แต่ปลายทวนต้องไม่หลุดกรอบ 64x64"
+    ]
+  },
+  "scope": {
+    "sizes": [
+      64
+    ],
+    "actions": [
+      "idle",
+      "walk",
+      "attack_01",
+      "skill_01",
+      "hurt",
+      "death"
+    ],
+    "directions": [
+      "south",
+      "south-east",
+      "east",
+      "north-east",
+      "north",
+      "north-west",
+      "west",
+      "south-west"
+    ],
+    "frames": {
+      "idle": 6,
+      "walk": 6,
+      "attack_01": 6,
+      "skill_01": 6,
+      "hurt": 6,
+      "death": 6
+    },
+    "cell": 64,
+    "columns": 6,
+    "key_color": "#00ff00",
+    "foot_anchor": {
+      "x": 32,
+      "y": 54
+    }
+  },
+  "generation": {
+    "method": "imagegen",
+    "imagegen_output_path": "source/canonical-base-sprite.png",
+    "procedural": false,
+    "text_only": false,
+    "imported_contact_sheet": false
+  },
+  "strips": [
+    {
+      "cell": 64,
+      "action": "attack_01",
+      "direction": "south",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-attack_01-south.png",
+      "source_path": "64/generated/attack_01-south.png",
+      "prompt_path": "64/prompts/attack_01-south.txt"
+    },
+    {
+      "cell": 64,
+      "action": "attack_01",
+      "direction": "south-east",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-attack_01-south-east.png",
+      "source_path": "64/generated/attack_01-south-east.png",
+      "prompt_path": "64/prompts/attack_01-south-east.txt"
+    },
+    {
+      "cell": 64,
+      "action": "attack_01",
+      "direction": "east",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-attack_01-east.png",
+      "source_path": "64/generated/attack_01-east.png",
+      "prompt_path": "64/prompts/attack_01-east.txt"
+    },
+    {
+      "cell": 64,
+      "action": "attack_01",
+      "direction": "north-east",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-attack_01-north-east.png",
+      "source_path": "64/generated/attack_01-north-east.png",
+      "prompt_path": "64/prompts/attack_01-north-east.txt"
+    },
+    {
+      "cell": 64,
+      "action": "attack_01",
+      "direction": "north",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-attack_01-north.png",
+      "source_path": "64/generated/attack_01-north.png",
+      "prompt_path": "64/prompts/attack_01-north.txt"
+    },
+    {
+      "cell": 64,
+      "action": "attack_01",
+      "direction": "north-west",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-attack_01-north-west.png",
+      "source_path": "64/generated/attack_01-north-west.png",
+      "prompt_path": "64/prompts/attack_01-north-west.txt"
+    },
+    {
+      "cell": 64,
+      "action": "attack_01",
+      "direction": "west",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-attack_01-west.png",
+      "source_path": "64/generated/attack_01-west.png",
+      "prompt_path": "64/prompts/attack_01-west.txt"
+    },
+    {
+      "cell": 64,
+      "action": "attack_01",
+      "direction": "south-west",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-attack_01-south-west.png",
+      "source_path": "64/generated/attack_01-south-west.png",
+      "prompt_path": "64/prompts/attack_01-south-west.txt"
+    },
+    {
+      "cell": 64,
+      "action": "death",
+      "direction": "south",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-death-south.png",
+      "source_path": "64/generated/death-south.png",
+      "prompt_path": "64/prompts/death-south.txt"
+    },
+    {
+      "cell": 64,
+      "action": "death",
+      "direction": "south-east",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-death-south-east.png",
+      "source_path": "64/generated/death-south-east.png",
+      "prompt_path": "64/prompts/death-south-east.txt"
+    },
+    {
+      "cell": 64,
+      "action": "death",
+      "direction": "east",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-death-east.png",
+      "source_path": "64/generated/death-east.png",
+      "prompt_path": "64/prompts/death-east.txt"
+    },
+    {
+      "cell": 64,
+      "action": "death",
+      "direction": "north-east",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-death-north-east.png",
+      "source_path": "64/generated/death-north-east.png",
+      "prompt_path": "64/prompts/death-north-east.txt"
+    },
+    {
+      "cell": 64,
+      "action": "death",
+      "direction": "north",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-death-north.png",
+      "source_path": "64/generated/death-north.png",
+      "prompt_path": "64/prompts/death-north.txt"
+    },
+    {
+      "cell": 64,
+      "action": "death",
+      "direction": "north-west",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-death-north-west.png",
+      "source_path": "64/generated/death-north-west.png",
+      "prompt_path": "64/prompts/death-north-west.txt"
+    },
+    {
+      "cell": 64,
+      "action": "death",
+      "direction": "west",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-death-west.png",
+      "source_path": "64/generated/death-west.png",
+      "prompt_path": "64/prompts/death-west.txt"
+    },
+    {
+      "cell": 64,
+      "action": "death",
+      "direction": "south-west",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-death-south-west.png",
+      "source_path": "64/generated/death-south-west.png",
+      "prompt_path": "64/prompts/death-south-west.txt"
+    },
+    {
+      "cell": 64,
+      "action": "hurt",
+      "direction": "south",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-hurt-south.png",
+      "source_path": "64/generated/hurt-south.png",
+      "prompt_path": "64/prompts/hurt-south.txt"
+    },
+    {
+      "cell": 64,
+      "action": "hurt",
+      "direction": "south-east",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-hurt-south-east.png",
+      "source_path": "64/generated/hurt-south-east.png",
+      "prompt_path": "64/prompts/hurt-south-east.txt"
+    },
+    {
+      "cell": 64,
+      "action": "hurt",
+      "direction": "east",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-hurt-east.png",
+      "source_path": "64/generated/hurt-east.png",
+      "prompt_path": "64/prompts/hurt-east.txt"
+    },
+    {
+      "cell": 64,
+      "action": "hurt",
+      "direction": "north-east",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-hurt-north-east.png",
+      "source_path": "64/generated/hurt-north-east.png",
+      "prompt_path": "64/prompts/hurt-north-east.txt"
+    },
+    {
+      "cell": 64,
+      "action": "hurt",
+      "direction": "north",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-hurt-north.png",
+      "source_path": "64/generated/hurt-north.png",
+      "prompt_path": "64/prompts/hurt-north.txt"
+    },
+    {
+      "cell": 64,
+      "action": "hurt",
+      "direction": "north-west",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-hurt-north-west.png",
+      "source_path": "64/generated/hurt-north-west.png",
+      "prompt_path": "64/prompts/hurt-north-west.txt"
+    },
+    {
+      "cell": 64,
+      "action": "hurt",
+      "direction": "west",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-hurt-west.png",
+      "source_path": "64/generated/hurt-west.png",
+      "prompt_path": "64/prompts/hurt-west.txt"
+    },
+    {
+      "cell": 64,
+      "action": "hurt",
+      "direction": "south-west",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-hurt-south-west.png",
+      "source_path": "64/generated/hurt-south-west.png",
+      "prompt_path": "64/prompts/hurt-south-west.txt"
+    },
+    {
+      "cell": 64,
+      "action": "idle",
+      "direction": "south",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-idle-south.png",
+      "source_path": "64/generated/idle-south.png",
+      "prompt_path": "64/prompts/idle-south.txt"
+    },
+    {
+      "cell": 64,
+      "action": "idle",
+      "direction": "south-east",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-idle-south-east.png",
+      "source_path": "64/generated/idle-south-east.png",
+      "prompt_path": "64/prompts/idle-south-east.txt"
+    },
+    {
+      "cell": 64,
+      "action": "idle",
+      "direction": "east",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-idle-east.png",
+      "source_path": "64/generated/idle-east.png",
+      "prompt_path": "64/prompts/idle-east.txt"
+    },
+    {
+      "cell": 64,
+      "action": "idle",
+      "direction": "north-east",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-idle-north-east.png",
+      "source_path": "64/generated/idle-north-east.png",
+      "prompt_path": "64/prompts/idle-north-east.txt"
+    },
+    {
+      "cell": 64,
+      "action": "idle",
+      "direction": "north",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-idle-north.png",
+      "source_path": "64/generated/idle-north.png",
+      "prompt_path": "64/prompts/idle-north.txt"
+    },
+    {
+      "cell": 64,
+      "action": "idle",
+      "direction": "north-west",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-idle-north-west.png",
+      "source_path": "64/generated/idle-north-west.png",
+      "prompt_path": "64/prompts/idle-north-west.txt"
+    },
+    {
+      "cell": 64,
+      "action": "idle",
+      "direction": "west",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-idle-west.png",
+      "source_path": "64/generated/idle-west.png",
+      "prompt_path": "64/prompts/idle-west.txt"
+    },
+    {
+      "cell": 64,
+      "action": "idle",
+      "direction": "south-west",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-idle-south-west.png",
+      "source_path": "64/generated/idle-south-west.png",
+      "prompt_path": "64/prompts/idle-south-west.txt"
+    },
+    {
+      "cell": 64,
+      "action": "skill_01",
+      "direction": "south",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-skill_01-south.png",
+      "source_path": "64/generated/skill_01-south.png",
+      "prompt_path": "64/prompts/skill_01-south.txt"
+    },
+    {
+      "cell": 64,
+      "action": "skill_01",
+      "direction": "south-east",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-skill_01-south-east.png",
+      "source_path": "64/generated/skill_01-south-east.png",
+      "prompt_path": "64/prompts/skill_01-south-east.txt"
+    },
+    {
+      "cell": 64,
+      "action": "skill_01",
+      "direction": "east",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-skill_01-east.png",
+      "source_path": "64/generated/skill_01-east.png",
+      "prompt_path": "64/prompts/skill_01-east.txt"
+    },
+    {
+      "cell": 64,
+      "action": "skill_01",
+      "direction": "north-east",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-skill_01-north-east.png",
+      "source_path": "64/generated/skill_01-north-east.png",
+      "prompt_path": "64/prompts/skill_01-north-east.txt"
+    },
+    {
+      "cell": 64,
+      "action": "skill_01",
+      "direction": "north",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-skill_01-north.png",
+      "source_path": "64/generated/skill_01-north.png",
+      "prompt_path": "64/prompts/skill_01-north.txt"
+    },
+    {
+      "cell": 64,
+      "action": "skill_01",
+      "direction": "north-west",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-skill_01-north-west.png",
+      "source_path": "64/generated/skill_01-north-west.png",
+      "prompt_path": "64/prompts/skill_01-north-west.txt"
+    },
+    {
+      "cell": 64,
+      "action": "skill_01",
+      "direction": "west",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-skill_01-west.png",
+      "source_path": "64/generated/skill_01-west.png",
+      "prompt_path": "64/prompts/skill_01-west.txt"
+    },
+    {
+      "cell": 64,
+      "action": "skill_01",
+      "direction": "south-west",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-skill_01-south-west.png",
+      "source_path": "64/generated/skill_01-south-west.png",
+      "prompt_path": "64/prompts/skill_01-south-west.txt"
+    },
+    {
+      "cell": 64,
+      "action": "walk",
+      "direction": "south",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-walk-south.png",
+      "source_path": "64/generated/walk-south.png",
+      "prompt_path": "64/prompts/walk-south.txt"
+    },
+    {
+      "cell": 64,
+      "action": "walk",
+      "direction": "south-east",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-walk-south-east.png",
+      "source_path": "64/generated/walk-south-east.png",
+      "prompt_path": "64/prompts/walk-south-east.txt"
+    },
+    {
+      "cell": 64,
+      "action": "walk",
+      "direction": "east",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-walk-east.png",
+      "source_path": "64/generated/walk-east.png",
+      "prompt_path": "64/prompts/walk-east.txt"
+    },
+    {
+      "cell": 64,
+      "action": "walk",
+      "direction": "north-east",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-walk-north-east.png",
+      "source_path": "64/generated/walk-north-east.png",
+      "prompt_path": "64/prompts/walk-north-east.txt"
+    },
+    {
+      "cell": 64,
+      "action": "walk",
+      "direction": "north",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-walk-north.png",
+      "source_path": "64/generated/walk-north.png",
+      "prompt_path": "64/prompts/walk-north.txt"
+    },
+    {
+      "cell": 64,
+      "action": "walk",
+      "direction": "north-west",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-walk-north-west.png",
+      "source_path": "64/generated/walk-north-west.png",
+      "prompt_path": "64/prompts/walk-north-west.txt"
+    },
+    {
+      "cell": 64,
+      "action": "walk",
+      "direction": "west",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-walk-west.png",
+      "source_path": "64/generated/walk-west.png",
+      "prompt_path": "64/prompts/walk-west.txt"
+    },
+    {
+      "cell": 64,
+      "action": "walk",
+      "direction": "south-west",
+      "method": "imagegen",
+      "imagegen_output_path": "source/64-walk-south-west.png",
+      "source_path": "64/generated/walk-south-west.png",
+      "prompt_path": "64/prompts/walk-south-west.txt"
+    }
+  ],
+  "visual_review": {
+    "path": "64/qa/visual-review.json"
+  }
+}

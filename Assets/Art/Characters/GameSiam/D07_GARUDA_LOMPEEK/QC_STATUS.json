@@ -1,0 +1,28 @@
+{
+  "character_id": "D07_GARUDA_LOMPEEK",
+  "status": "passed_strict_identity_qc",
+  "cell_size": 64,
+  "actions": [
+    "idle",
+    "walk",
+    "attack_01",
+    "skill_01",
+    "hurt",
+    "death"
+  ],
+  "directions": [
+    "south",
+    "south-east",
+    "east",
+    "north-east",
+    "north",
+    "north-west",
+    "west",
+    "south-west"
+  ],
+  "visual_review": "run/game-siam-roster-40/characters/D07_GARUDA_LOMPEEK/64/qa/visual-review.json",
+  "manifest_validation": "run/game-siam-roster-40/characters/D07_GARUDA_LOMPEEK/64/qa/manifest-validation.json",
+  "identity_qc_board": "run/game-siam-roster-40/characters/D07_GARUDA_LOMPEEK/64/qa/identity-qc-board.png",
+  "handoff_qc_report": "run/game-siam-roster-40/qc/qc-handoff-audit-2026-06-27.md",
+  "notes": "Strict visual QC accepted D07_GARUDA_LOMPEEK after comparing canonical base, idle lock, and all six action contact sheets. The same Garuda identity holds across idle, walk, attack_01, skill_01, hurt, and death: cream/pale-gold feathers with red accents, red-gold crest, small wings, clawed hands, talon feet, no weapon, same scale and pixel style. Skill wind effects and attack arcs remain secondary and do not replace the character."
+}

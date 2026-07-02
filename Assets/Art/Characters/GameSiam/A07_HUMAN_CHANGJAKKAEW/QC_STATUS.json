@@ -1,0 +1,28 @@
+{
+  "character_id": "A07_HUMAN_CHANGJAKKAEW",
+  "status": "passed",
+  "cell_size": 64,
+  "actions": [
+    "idle",
+    "walk",
+    "attack_01",
+    "skill_01",
+    "hurt",
+    "death"
+  ],
+  "directions": [
+    "south",
+    "south-east",
+    "east",
+    "north-east",
+    "north",
+    "north-west",
+    "west",
+    "south-west"
+  ],
+  "visual_review": "run/game-siam-roster-40/characters/A07_HUMAN_CHANGJAKKAEW/64/qa/visual-review.json",
+  "manifest_validation": "run/game-siam-roster-40/characters/A07_HUMAN_CHANGJAKKAEW/64/qa/manifest-validation.json",
+  "identity_qc_board": "run/game-siam-roster-40/characters/A07_HUMAN_CHANGJAKKAEW/64/qa/identity-qc-board.png",
+  "handoff_qc_report": "run/game-siam-roster-40/qc/qc-handoff-audit-2026-06-27.md",
+  "notes": "A07 complete 64px pass accepted. Identity lock stays consistent as a middle-aged Siamese arcane engineer with goggles, brass/teal/orange armor, magic wrench, tool belt, and compact elephant-head construct motif. Idle, walk, attack_01, skill_01, hurt, and death contact sheets were inspected. Geometry validation passed for all six actions, with walk motion audit passing. Skill south-west and attack south-west were regenerated/fallback-selected for screen-left facing."
+}

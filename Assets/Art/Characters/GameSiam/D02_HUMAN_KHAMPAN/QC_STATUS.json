@@ -1,0 +1,28 @@
+{
+  "character_id": "D02_HUMAN_KHAMPAN",
+  "status": "passed_strict_identity_qc",
+  "cell_size": 64,
+  "actions": [
+    "idle",
+    "walk",
+    "attack_01",
+    "skill_01",
+    "hurt",
+    "death"
+  ],
+  "directions": [
+    "south",
+    "south-east",
+    "east",
+    "north-east",
+    "north",
+    "north-west",
+    "west",
+    "south-west"
+  ],
+  "visual_review": "run/game-siam-roster-40/characters/D02_HUMAN_KHAMPAN/64/qa/visual-review.json",
+  "manifest_validation": "run/game-siam-roster-40/characters/D02_HUMAN_KHAMPAN/64/qa/manifest-validation.json",
+  "identity_qc_board": "run/game-siam-roster-40/characters/D02_HUMAN_KHAMPAN/64/qa/identity-qc-board.png",
+  "handoff_qc_report": "run/game-siam-roster-40/qc/qc-handoff-audit-2026-06-27.md",
+  "notes": "Strict identity QC passed after comparing canonical-base-sprite.png, idle lock, and all six action contact sheets. The character remains the same sturdy Thai farmer across idle, walk, attack_01, skill_01, hurt, and death: indigo shirt, brown waist cloth, golden rice sheaf, short sickle/farming tool, black tousled hair, tan skin, sturdy proportions, and compact 64x64 pixel style stay consistent. Skill effects do not hide the body; death final frames remain readable as the same farmer."
+}

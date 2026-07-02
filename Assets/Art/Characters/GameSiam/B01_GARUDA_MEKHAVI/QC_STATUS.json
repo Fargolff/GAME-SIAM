@@ -1,0 +1,28 @@
+{
+  "character_id": "B01_GARUDA_MEKHAVI",
+  "status": "passed",
+  "cell_size": 64,
+  "actions": [
+    "idle",
+    "walk",
+    "attack_01",
+    "skill_01",
+    "hurt",
+    "death"
+  ],
+  "directions": [
+    "south",
+    "south-east",
+    "east",
+    "north-east",
+    "north",
+    "north-west",
+    "west",
+    "south-west"
+  ],
+  "visual_review": "run/game-siam-roster-40/characters/B01_GARUDA_MEKHAVI/64/qa/visual-review.json",
+  "manifest_validation": "run/game-siam-roster-40/characters/B01_GARUDA_MEKHAVI/64/qa/manifest-validation.json",
+  "identity_qc_board": "run/game-siam-roster-40/characters/B01_GARUDA_MEKHAVI/64/qa/identity-qc-board.png",
+  "handoff_qc_report": "run/game-siam-roster-40/qc/qc-handoff-audit-2026-06-27.md",
+  "notes": "B01 complete 64px pass accepted. Identity lock stays consistent as a slim cloud Garuda marksman with blue-white compact wings, pale gold armor, and short feather bow. Idle, walk, attack_01, skill_01, hurt, and death contact sheets were inspected. Geometry validation passed for all six actions, with walk motion audit passing. A few west/south-west bow rows are closer to side profile than front-left, but remain directionally usable and preserve identity."
+}

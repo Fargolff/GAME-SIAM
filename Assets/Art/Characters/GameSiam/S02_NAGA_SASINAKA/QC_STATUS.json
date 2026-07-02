@@ -1,0 +1,14 @@
+{
+  "character_id": "S02_NAGA_SASINAKA",
+  "status": "passed_after_v2_revision",
+  "reason": "Initial idle draft was rejected for style/scale drift. Full v2 set passed validation and visual review for all six actions.",
+  "do_not_ship": false,
+  "accepted_actions": [
+    "idle",
+    "walk",
+    "attack_01",
+    "skill_01",
+    "hurt",
+    "death"
+  ]
+}

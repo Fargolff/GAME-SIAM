@@ -1,0 +1,28 @@
+{
+  "character_id": "C09_KINNARI_KAEWKANGSADAN",
+  "status": "passed_strict_identity_qc",
+  "cell_size": 64,
+  "actions": [
+    "idle",
+    "walk",
+    "attack_01",
+    "skill_01",
+    "hurt",
+    "death"
+  ],
+  "directions": [
+    "south",
+    "south-east",
+    "east",
+    "north-east",
+    "north",
+    "north-west",
+    "west",
+    "south-west"
+  ],
+  "visual_review": "run/game-siam-roster-40/characters/C09_KINNARI_KAEWKANGSADAN/64/qa/visual-review.json",
+  "manifest_validation": "run/game-siam-roster-40/characters/C09_KINNARI_KAEWKANGSADAN/64/qa/manifest-validation.json",
+  "identity_qc_board": "run/game-siam-roster-40/characters/C09_KINNARI_KAEWKANGSADAN/64/qa/identity-qc-board.png",
+  "handoff_qc_report": "run/game-siam-roster-40/qc/qc-handoff-audit-2026-06-27.md",
+  "notes": "Accepted after strict identity rework from the main QC rejection. The C09 lock was rebuilt around a consistent animation-friendly kinnari identity: brown hair, tall gold crown with green gem, compact white-and-mint wings, white/gold/mint outfit, and a prominent round gold ring with hanging bell. All six actions were compared against source/canonical-base-sprite.png, the accepted idle contact sheet, and the combined identity QC board before approval."
+}

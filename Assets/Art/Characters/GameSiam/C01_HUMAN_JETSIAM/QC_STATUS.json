@@ -1,0 +1,28 @@
+{
+  "character_id": "C01_HUMAN_JETSIAM",
+  "status": "passed_strict_identity_qc",
+  "cell_size": 64,
+  "actions": [
+    "idle",
+    "walk",
+    "attack_01",
+    "skill_01",
+    "hurt",
+    "death"
+  ],
+  "directions": [
+    "south",
+    "south-east",
+    "east",
+    "north-east",
+    "north",
+    "north-west",
+    "west",
+    "south-west"
+  ],
+  "visual_review": "run/game-siam-roster-40/characters/C01_HUMAN_JETSIAM/64/qa/visual-review.json",
+  "manifest_validation": "run/game-siam-roster-40/characters/C01_HUMAN_JETSIAM/64/qa/manifest-validation.json",
+  "identity_qc_board": "run/game-siam-roster-40/characters/C01_HUMAN_JETSIAM/64/qa/identity-qc-board.png",
+  "handoff_qc_report": "run/game-siam-roster-40/qc/qc-handoff-audit-2026-06-27.md",
+  "notes": "Strict identity QC passed after comparing canonical-base-sprite.png, idle lock, and all six action contact sheets. The character remains the same Thai human spear soldier across idle, walk, attack_01, skill_01, hurt, and death: dark high-tuft hair, bronze crest with red gem, blue armor with bronze trim, red sash, small round blue-and-bronze shield, and long spear stay consistent. Death final frames remain a readable collapsed soldier silhouette with spear and shield visible; no fade/blob identity loss."
+}
