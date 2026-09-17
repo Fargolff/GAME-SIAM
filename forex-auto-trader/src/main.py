@@ -12,6 +12,7 @@ from .data import MarketDataStore, normalize_ohlc
 from .mt5_broker import MT5Broker
 from .research import run_strategy_batch, save_research_results
 from .strategy import available_strategies, build_signals, strategy_spec
+from .validation import ValidationConfig, validate_strategy_batch
 
 
 def _synthetic_data(rows: int = 3000, seed: int = 42) -> pd.DataFrame:
@@ -33,6 +34,19 @@ def _synthetic_data(rows: int = 3000, seed: int = 42) -> pd.DataFrame:
     return normalize_ohlc(pd.DataFrame({"open": open_, "high": high, "low": low, "close": close}, index=idx))
 
 
+def _periods_per_year(timeframe: str) -> float:
+    mapping = {
+        "M1": 252.0 * 24.0 * 60.0,
+        "M5": 252.0 * 24.0 * 12.0,
+        "M15": 252.0 * 24.0 * 4.0,
+        "M30": 252.0 * 24.0 * 2.0,
+        "H1": 252.0 * 24.0,
+        "H4": 252.0 * 6.0,
+        "D1": 252.0,
+    }
+    return mapping.get(timeframe.upper(), 252.0 * 24.0)
+
+
 def _backtest_config(cfg) -> BacktestConfig:
     return BacktestConfig(
         initial_equity=cfg.initial_equity,
@@ -42,6 +56,7 @@ def _backtest_config(cfg) -> BacktestConfig:
         spread_pips=cfg.spread_pips,
         slippage_pips=cfg.slippage_pips,
         commission_per_lot_round_turn=cfg.commission_per_lot_round_turn,
+        periods_per_year=_periods_per_year(cfg.timeframe),
     )
 
 
@@ -94,6 +109,8 @@ def main() -> None:
             "mt5-backtest",
             "batch-demo",
             "batch-mt5",
+            "validate-demo",
+            "validate-mt5",
             "cache-mt5",
             "list-strategies",
         ],
@@ -102,10 +119,16 @@ def main() -> None:
     )
     parser.add_argument("--bars", type=int, default=5000)
     parser.add_argument("--strategy", default=None, help="Override config strategy for a single backtest.")
-    parser.add_argument("--strategies", default="all", help="Comma-separated names or 'all' for batch modes.")
+    parser.add_argument("--strategies", default="all", help="Comma-separated names or 'all' for batch/validation modes.")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--save-data", action="store_true", help="Cache loaded bars under data_dir.")
     parser.add_argument("--output", default="results/strategy_leaderboard.csv")
+    parser.add_argument("--validation-output", default="results/robust_validation.csv")
+    parser.add_argument("--mc-runs", type=int, default=1000)
+    parser.add_argument("--wf-train-bars", type=int, default=2000)
+    parser.add_argument("--wf-test-bars", type=int, default=500)
+    parser.add_argument("--wf-step-bars", type=int, default=500)
+    parser.add_argument("--param-perturbation", type=float, default=0.20)
     args = parser.parse_args()
 
     if args.mode == "list-strategies":
@@ -122,7 +145,8 @@ def main() -> None:
     cfg = load_config(config_path)
     store = MarketDataStore(cfg.data_dir)
 
-    if args.mode in {"demo-backtest", "batch-demo"}:
+    demo_modes = {"demo-backtest", "batch-demo", "validate-demo"}
+    if args.mode in demo_modes:
         raw = _synthetic_data(args.bars, seed=args.seed)
     else:
         raw = _mt5_data(cfg, args.bars)
@@ -148,6 +172,37 @@ def main() -> None:
         print(display.to_string(index=False))
         print(f"\nSaved leaderboard -> {path}")
         print("NOTE: in-sample rank is only a screening tool, not evidence of a durable edge.")
+        return
+
+    if args.mode in {"validate-demo", "validate-mt5"}:
+        names = _selected_strategy_names(args.strategies)
+        validation_cfg = ValidationConfig(
+            walk_forward_train_bars=args.wf_train_bars,
+            walk_forward_test_bars=args.wf_test_bars,
+            walk_forward_step_bars=args.wf_step_bars,
+            parameter_perturbation=args.param_perturbation,
+            monte_carlo_runs=args.mc_runs,
+            seed=args.seed,
+        )
+        results = validate_strategy_batch(raw, bt_cfg, names, validation_cfg)
+        target = Path(args.validation_output)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        results.to_csv(target, index=False)
+        display = results.copy()
+        for col in (
+            "oos_return_pct",
+            "oos_max_drawdown_pct",
+            "walk_forward_positive_fraction",
+            "parameter_stability_fraction",
+            "monte_carlo_ruin_probability",
+            "monte_carlo_p95_drawdown",
+        ):
+            if col in display:
+                display[col] = display[col] * 100.0
+        print("\n=== ROBUST VALIDATION ===")
+        print(display.to_string(index=False))
+        print(f"\nSaved validation report -> {target}")
+        print("PASS is a research gate only. It is not permission to deploy meaningful capital.")
         return
 
     strategy_name = args.strategy or cfg.strategy.name
