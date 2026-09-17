@@ -1,0 +1,21 @@
+mode: backtest
+symbol: EURUSD
+timeframe: H1
+initial_equity: 10000
+risk_per_trade: 0.005
+max_daily_loss_pct: 0.02
+max_drawdown_pct: 0.10
+spread_pips: 0.8
+slippage_pips: 0.2
+commission_per_lot_round_turn: 7.0
+strategy:
+  name: ema_trend
+  fast: 20
+  slow: 50
+  atr_period: 14
+  stop_atr: 2.0
+  take_profit_atr: 3.0
+live:
+  enabled: false
+  magic: 56001
+  deviation_points: 20
