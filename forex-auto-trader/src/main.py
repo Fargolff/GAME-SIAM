@@ -25,10 +25,11 @@ def _synthetic_data(rows: int = 3000, seed: int = 42) -> pd.DataFrame:
     volatility = np.where(segment % 2 == 0, 0.00045, 0.00080)
     noise = rng.normal(0.0, volatility, rows)
     close = 1.10 + np.cumsum(drift + noise)
-    spread = rng.uniform(0.00008, 0.00035, rows)
-    high = close + rng.uniform(0.0001, 0.0007, rows) + spread / 2
-    low = close - rng.uniform(0.0001, 0.0007, rows) - spread / 2
     open_ = np.r_[close[0], close[:-1]]
+    upper_wick = rng.uniform(0.0001, 0.0007, rows)
+    lower_wick = rng.uniform(0.0001, 0.0007, rows)
+    high = np.maximum(open_, close) + upper_wick
+    low = np.minimum(open_, close) - lower_wick
     return normalize_ohlc(pd.DataFrame({"open": open_, "high": high, "low": low, "close": close}, index=idx))
 
 
