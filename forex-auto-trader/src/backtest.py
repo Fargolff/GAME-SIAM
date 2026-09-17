@@ -19,6 +19,7 @@ class BacktestConfig:
     spread_pips: float = 0.8
     slippage_pips: float = 0.2
     commission_per_lot_round_turn: float = 7.0
+    periods_per_year: float = 252.0 * 24.0
 
 
 @dataclass
@@ -50,6 +51,8 @@ def run_backtest(df: pd.DataFrame, cfg: BacktestConfig) -> dict:
     missing = required.difference(df.columns)
     if missing:
         raise ValueError(f"missing columns: {sorted(missing)}")
+    if cfg.periods_per_year <= 0:
+        raise ValueError("periods_per_year must be positive")
 
     equity = cfg.initial_equity
     peak_equity = equity
@@ -71,7 +74,7 @@ def run_backtest(df: pd.DataFrame, cfg: BacktestConfig) -> dict:
             current_day = day
             start_of_day_equity = equity
 
-        killed, reason = kill_switch_triggered(start_of_day_equity, peak_equity, equity, limits)
+        killed, _reason = kill_switch_triggered(start_of_day_equity, peak_equity, equity, limits)
         if killed:
             equity_curve.append((ts, equity))
             continue
@@ -83,6 +86,9 @@ def run_backtest(df: pd.DataFrame, cfg: BacktestConfig) -> dict:
             exit_reason = None
             raw_exit = None
 
+            # Stop is checked first when both stop and take-profit are touched inside
+            # the same OHLC bar. This is intentionally conservative because intrabar
+            # path is unknown without higher-frequency data.
             if side > 0:
                 if row["low"] <= stop:
                     raw_exit, exit_reason = stop, "stop"
@@ -154,7 +160,7 @@ def run_backtest(df: pd.DataFrame, cfg: BacktestConfig) -> dict:
     max_dd = ((curve.cummax() - curve) / curve.cummax()).max() if len(curve) else 0.0
     annualized_sharpe = 0.0
     if returns.std(ddof=0) > 0:
-        annualized_sharpe = np.sqrt(252 * 24) * returns.mean() / returns.std(ddof=0)
+        annualized_sharpe = np.sqrt(cfg.periods_per_year) * returns.mean() / returns.std(ddof=0)
 
     pnl_values = [t.pnl for t in trades]
     wins = [x for x in pnl_values if x > 0]
