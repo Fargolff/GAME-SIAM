@@ -9,6 +9,7 @@ Personal research framework for automated Forex trading with a focus on reproduc
 - Position sizing is risk-based.
 - Daily loss and max drawdown kill-switches are part of the design.
 - In-sample leaderboard rank is treated only as a screening result, not proof of an edge.
+- A Phase 4 `PASS` is only a research gate. It is not permission to deploy meaningful capital.
 
 ## Current architecture
 
@@ -21,6 +22,7 @@ forex-auto-trader/
 │  ├─ data.py
 │  ├─ strategy.py
 │  ├─ research.py
+│  ├─ validation.py
 │  ├─ risk.py
 │  ├─ backtest.py
 │  ├─ mt5_broker.py
@@ -29,7 +31,8 @@ forex-auto-trader/
    ├─ test_data.py
    ├─ test_research.py
    ├─ test_risk.py
-   └─ test_strategy_factory.py
+   ├─ test_strategy_factory.py
+   └─ test_validation.py
 ```
 
 ## Phase status
@@ -40,6 +43,8 @@ forex-auto-trader/
 - Risk-based position sizing
 - Daily-loss and drawdown kill switches
 - MT5 market-data adapter
+- Conservative same-bar stop/TP handling
+- Timeframe-aware Sharpe annualization
 
 ### Phase 2 — Data Engine ✅
 - UTC-normalized OHLC validation
@@ -75,6 +80,35 @@ take_profit_distance   price distance
 ```
 
 This allows the same backtest engine to compare hypotheses without strategy-specific execution code.
+
+### Phase 4 — Robust Validation ✅
+Phase 4 attempts to reject fragile backtests before paper trading.
+
+Implemented checks:
+
+- Chronological Train / Validation / untouched Out-of-Sample split
+- Local parameter-neighborhood search instead of unrestricted optimization
+- Validation-weighted parameter selection
+- Rolling walk-forward re-selection and forward evaluation
+- Parameter-stability analysis around the selected configuration
+- Bootstrap/Monte Carlo trade-path simulation
+- Approximate loss probability, ruin probability and 95th-percentile drawdown
+- Sharpe decay from Train to Out-of-Sample
+- Automated research verdict: `PASS`, `WATCH`, `REJECT`, or `ERROR`
+
+The default research gate checks:
+
+```text
+OOS minimum trade count
+OOS profit factor
+OOS Sharpe
+OOS max drawdown
+Walk-forward positive-window fraction
+Parameter stability fraction
+Monte Carlo ruin probability
+```
+
+A strategy can still fail live after passing these tests. Regime change, broker execution, swap, spread expansion, gaps and model error remain material risks.
 
 ## Quick start
 
@@ -116,31 +150,91 @@ Cache MT5 history locally:
 python -m src.main --mode cache-mt5 --bars 50000
 ```
 
-Batch results are exported by default to:
+## Robust validation commands
+
+Validate one candidate on synthetic regime-changing data:
+
+```bash
+python -m src.main --mode validate-demo --strategies ema_trend --bars 8000
+```
+
+Validate a shortlist:
+
+```bash
+python -m src.main --mode validate-demo --strategies ema_trend,trend_breakout,long_term_momentum --bars 12000
+```
+
+Validate all registered strategies on MT5 history:
+
+```bash
+python -m src.main --mode validate-mt5 --strategies all --bars 30000 --mc-runs 2000
+```
+
+Tune the robustness workload:
+
+```bash
+python -m src.main --mode validate-mt5 \
+  --strategies ema_trend,donchian_breakout \
+  --bars 30000 \
+  --wf-train-bars 6000 \
+  --wf-test-bars 1500 \
+  --wf-step-bars 1500 \
+  --param-perturbation 0.20 \
+  --mc-runs 3000
+```
+
+Phase 3 batch results are exported by default to:
 
 ```text
 results/strategy_leaderboard.csv
 ```
 
+Phase 4 robust validation results are exported by default to:
+
+```text
+results/robust_validation.csv
+```
+
+## How to interpret Phase 4
+
+`PASS` means the candidate cleared all configured research checks on the supplied dataset. `WATCH` means it is close but has one or two material weaknesses. `REJECT` means several robustness checks failed. `ERROR` means the experiment itself could not be evaluated.
+
+Do not repeatedly change thresholds until a strategy passes. That simply moves overfitting from the strategy parameters into the validation rules.
+
 ## Research discipline
 
-Do **not** select a strategy for live trading because it tops the current leaderboard. Testing many hypotheses creates multiple-testing and overfitting risk. The next validation phase must evaluate candidates on data they were not optimized on.
+Do **not** select a strategy for live trading because it tops the current leaderboard. Testing many hypotheses creates multiple-testing and overfitting risk. The untouched Out-of-Sample segment should not be repeatedly reused for strategy development after its result is observed.
+
+Recommended workflow:
+
+```text
+Hypothesis
+   ↓
+In-sample screening
+   ↓
+Train / Validation selection
+   ↓
+Untouched Out-of-Sample
+   ↓
+Walk-forward consistency
+   ↓
+Parameter stability
+   ↓
+Monte Carlo path risk
+   ↓
+PASS / WATCH / REJECT
+   ↓
+Paper trading only if still credible
+```
 
 ## Next phases
-
-### Phase 4 — Robust Validation
-- Train / validation / untouched out-of-sample splits
-- Rolling walk-forward evaluation
-- Parameter stability maps
-- Bootstrap / Monte Carlo trade-path analysis
-- Multiple-testing-aware scoring
-- More realistic timeframe-aware performance metrics
 
 ### Phase 5 — Portfolio Research
 - Correlation between strategy equity curves
 - Strategy diversification
 - Risk budgeting
 - Portfolio-level drawdown controls
+- Avoid stacking multiple versions of the same hidden risk exposure
 
 ### Phase 6 — Paper Trading
 - MT5 paper daemon
