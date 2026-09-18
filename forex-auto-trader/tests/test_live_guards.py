@@ -1,7 +1,7 @@
 import pytest
 
 from src.live import ARM_PHRASE, LiveEngineConfig, preflight_report, require_live_arming, risk_sized_lots
-from src.mt5_broker import AccountSnapshot, BrokerPosition, BrokerTick, SymbolSpec
+from src.mt5_broker import AccountSnapshot, BrokerPosition, BrokerTick, SymbolSpec, TerminalSnapshot
 
 
 def _spec() -> SymbolSpec:
@@ -21,7 +21,7 @@ def _spec() -> SymbolSpec:
 
 
 class FakeBroker:
-    def __init__(self, *, hedging=True, bid=1.10000, ask=1.10008, positions=None):
+    def __init__(self, *, hedging=True, bid=1.10000, ask=1.10008, positions=None, connected=True, trade_allowed=True):
         self._account = AccountSnapshot(
             balance=10000.0,
             equity=10000.0,
@@ -35,6 +35,10 @@ class FakeBroker:
         )
         self._tick = BrokerTick(bid=bid, ask=ask, time_msc=0)
         self._positions = positions or []
+        self._terminal = TerminalSnapshot(connected=connected, trade_allowed=trade_allowed, dlls_allowed=False)
+
+    def terminal_snapshot(self):
+        return self._terminal
 
     def account_snapshot(self):
         return self._account
@@ -85,6 +89,17 @@ def test_preflight_accepts_safe_hedging_environment():
     report = preflight_report(FakeBroker(), "EURUSD", LiveEngineConfig(), live_enabled=True)
     assert report["ok"] is True
     assert all(report["checks"].values())
+
+
+def test_preflight_rejects_terminal_disconnect():
+    report = preflight_report(
+        FakeBroker(connected=False),
+        "EURUSD",
+        LiveEngineConfig(),
+        live_enabled=True,
+    )
+    assert report["ok"] is False
+    assert report["checks"]["terminal_connected"] is False
 
 
 def test_preflight_rejects_netting_account_and_wide_spread():
