@@ -1,81 +1,108 @@
 # Forex Auto Trader Research Framework
 
-Personal research framework for automated Forex trading with reproducible experiments, cost-aware backtests, robust validation, portfolio-level risk control, paper-forward verification, explicitly guarded live execution and production operations monitoring.
+Personal automated-Forex research and execution framework with reproducible research, cost-aware backtests, robust validation, portfolio controls, paper-forward testing, guarded MT5 live execution, production supervision, an independent watchdog and disaster-recovery tooling.
 
 ## Safety defaults
+
 - Live trading is **disabled by default**.
 - Paper mode never calls `order_send`.
-- Real-order modes require **both** `live.enabled: true` and the exact operator arming phrase.
-- Live mode supports **MT5 hedging accounts only** so individual strategy positions remain separable.
-- Live mode applies per-order lot caps, total managed-lot caps, open-position caps and a maximum-spread gate.
-- Live sizing uses broker-reported tick size, tick value and volume constraints.
-- Emergency flatten affects only positions for the configured symbol and magic number.
+- Real-order modes require both `live.enabled: true` and the exact operator arming phrase.
+- Guarded live supports MT5 hedging accounts only so strategy positions remain separable.
+- Live execution uses broker-reported tick size/value and volume constraints.
+- Per-order lots, total lots, open-position count and spread are capped.
 - Bar-close signals execute on the next bar open in research/paper models.
-- Live mode evaluates only the newest completed bar and never replays missed historical bars into broker orders.
-- Phase 8 rejects stale market data, detects managed-position anomalies and writes a runtime heartbeat before new live risk is accepted.
-- Operational ambiguity fails closed for **new orders**. Integrity incidents halt the live engine without guessing which broker positions should be flattened.
-- Daily-loss and max-drawdown breaches retain the explicit risk-kill-switch flatten behavior.
-- A Phase 4 `PASS`, portfolio OOS result, paper result or clean operational health report does not guarantee profitability.
+- Live mode evaluates only the newest completed bar; missed historical bars are never replayed into broker orders.
+- Stale market data, position-integrity incidents, broker disconnects, account-risk breaches and production anomalies fail closed.
+- Phase 9 adds a persistent production halt that survives process/Windows restarts.
+- Phase 10 watchdog/recovery tools have **no broker-order path**.
+- Research `PASS`, portfolio OOS, paper results or clean health checks do not guarantee profitability.
 
-## Current architecture
+## Architecture
+
+```text
+Strategy Factory
+      ↓
+Cost-aware Backtest
+      ↓
+Robust Validation
+      ↓
+Portfolio Research
+      ↓
+MT5 Paper Forward
+      ↓
+Guarded Live Engine
+      ↓
+Broker Reconciliation + Runtime Health
+      ↓
+Production Supervisor
+      ↓
+External Watchdog + Disaster Recovery
+```
+
+Key files:
 
 ```text
 forex-auto-trader/
 ├─ config.example.yaml
+├─ production.example.yaml
+├─ watchdog.example.yaml
 ├─ requirements.txt
+├─ docs/
+│  ├─ phase9-production.md
+│  └─ phase10-watchdog-recovery.md
+├─ deploy/windows/
+│  ├─ run-live-supervisor.ps1
+│  ├─ install-scheduled-task.ps1
+│  ├─ run-watchdog.ps1
+│  └─ install-watchdog-task.ps1
 ├─ src/
+│  ├─ backtest.py
 │  ├─ config.py
 │  ├─ data.py
-│  ├─ strategy.py
-│  ├─ research.py
-│  ├─ validation.py
-│  ├─ portfolio.py
-│  ├─ paper.py
 │  ├─ live.py
-│  ├─ ops.py
-│  ├─ risk.py
-│  ├─ backtest.py
+│  ├─ main.py
 │  ├─ mt5_broker.py
-│  └─ main.py
+│  ├─ ops.py
+│  ├─ paper.py
+│  ├─ portfolio.py
+│  ├─ production.py
+│  ├─ recovery.py
+│  ├─ research.py
+│  ├─ risk.py
+│  ├─ soak.py
+│  ├─ strategy.py
+│  ├─ validation.py
+│  └─ watchdog.py
 └─ tests/
-   ├─ test_backtest_execution.py
-   ├─ test_data.py
-   ├─ test_live_guards.py
-   ├─ test_ops.py
-   ├─ test_paper.py
-   ├─ test_portfolio.py
-   ├─ test_research.py
-   ├─ test_risk.py
-   ├─ test_strategy_factory.py
-   └─ test_validation.py
+   └─ ...
 ```
 
 ## Phase status
 
-### Phase 1 — Core backtest/risk engine ✅
-- Cost-aware backtest
-- ATR exits
-- Risk-based position sizing
-- Daily-loss and drawdown kill switches
-- MT5 market-data adapter
-- Conservative same-bar stop/TP handling
+### Phase 1 — Core Backtest/Risk Engine ✅
+
+- Configurable spread, slippage and commission
+- ATR stop/take-profit exits
+- Risk-based sizing
+- Daily-loss and max-drawdown kill switches
+- Conservative stop/TP ambiguity handling
 - Gap-stop handling
-- Next-bar execution for bar-close signals
-- End-of-sample position realization
-- Timeframe-aware Sharpe annualization
+- Bar-close signal → next-bar-open execution
+- End-of-sample realization
+- Timeframe-aware Sharpe approximation
 
 ### Phase 2 — Data Engine ✅
+
 - UTC-normalized OHLC validation
-- Duplicate handling and sorting
+- Sorting/de-duplication
 - CSV.GZ local cache
 - Incremental upsert/merge
 - OHLC resampling
 - MT5 cache command
 
 ### Phase 3 — Strategy Factory + Batch Research ✅
-The registry currently contains 13 testable hypotheses across trend, breakout, momentum and mean-reversion families.
 
-Every strategy returns the same contract:
+13 testable hypotheses across trend, breakout, momentum and mean-reversion families. Every strategy emits:
 
 ```text
 signal                 -1 / 0 / +1
@@ -84,99 +111,100 @@ take_profit_distance   price distance
 ```
 
 ### Phase 4 — Robust Validation ✅
-- Chronological Train / Validation / untouched Out-of-Sample split
-- Local parameter-neighborhood search
-- Validation-weighted parameter selection
+
+- Chronological Train / Validation / untouched OOS split
+- Bounded parameter-neighborhood selection
 - Rolling walk-forward evaluation
-- Parameter-stability analysis
-- Bootstrap / Monte Carlo trade-path simulation
-- Sharpe decay from Train to OOS
-- Automated `PASS`, `WATCH`, `REJECT`, or `ERROR` verdict
+- Parameter-stability checks
+- Trade-path bootstrap / Monte Carlo
+- Sharpe decay monitoring
+- `PASS` / `WATCH` / `REJECT` research gate
 
 ### Phase 5 — Portfolio Research ✅
-- Phase 4 verdict gate before portfolio inclusion
-- Strategy return-correlation analysis
-- Inverse-volatility allocation with absolute-correlation penalty
-- Maximum strategy-weight constraint
-- Risk-contribution and diversification metrics
-- Frozen weights evaluated on untouched OOS data
-- Portfolio-level Sharpe, volatility, max drawdown and Monte Carlo path risk
-- CSV exports for weights, candidates, correlation, OOS equity and summary
+
+- Strategy correlation analysis
+- Correlation-penalized inverse-volatility allocation
+- Maximum strategy-weight cap
+- Risk contributions and diversification metrics
+- Portfolio OOS metrics and block-bootstrap Monte Carlo
+- CSV exports for weights, candidates, correlation and OOS equity
 
 ### Phase 6 — MT5 Paper Trading ✅
+
 - Persistent atomic JSON state
-- Restart-safe `last_bar_time`
-- Idempotent processing
-- Loads Phase 5 portfolio weights and selected parameters
-- Signal-at-close → next-completed-bar-open simulation
+- Restart-safe/idempotent completed-bar processing
+- Loads Phase 5 portfolio bundle
 - Spread/slippage/commission paper fills
-- Gap stop / gap take-profit handling
-- Portfolio mark-to-market equity
-- Daily-loss and max-drawdown kill switch
-- Persistent hard halt after a breach
-- CSV event audit trail
-- MT5 completed-bar filter
-- `paper-demo`, `paper-mt5-once`, and `paper-mt5-daemon`
+- Gap stop/take-profit handling
+- Mark-to-market equity
+- Daily-loss / drawdown halt
+- CSV audit trail
+- `paper-demo`, `paper-mt5-once`, `paper-mt5-daemon`
 
 ### Phase 7 — Guarded Small Live Deployment ✅
-Phase 7 adds a deliberately constrained real-order path instead of turning paper mode directly into live mode.
 
-Implemented:
-- Broker-native tick size/value, contract size, volume min/step/max and pip-size derivation
-- Risk sizing from broker tick value rather than a generic `$10/pip` assumption
-- MT5 `order_check()` before every real order
-- Filling-mode fallback checks before `order_send`
-- Hedging-account requirement for strategy-level position separation
-- Strategy tagging via magic number + `fat:<strategy>` comment
-- Per-order lot cap, total managed-lot cap and managed open-position cap
-- Maximum spread gate
-- Daily-loss and max-drawdown hard halt
-- Emergency flatten for managed positions
-- Persistent live state and CSV audit log
-- No historical-order replay after restart
-- Read-only `live-preflight`
-- Explicit operator arming requirement
-- `live-mt5-once`, `live-mt5-daemon`, and `live-flatten`
+- Broker-native tick/value/volume sizing
+- `order_check()` before real orders
+- Filling-mode fallback
+- Hedging-account requirement
+- Strategy tagging via magic + `fat:<strategy>`
+- Per-order, total-lot, position-count and spread limits
+- Daily-loss / max-drawdown halt
+- Managed emergency flatten
+- Persistent live state and audit log
+- Explicit double live gate
+- `live-preflight`, `live-mt5-once`, `live-mt5-daemon`, `live-flatten`
 
 ### Phase 8 — Production Hardening & Reconciliation ✅
-Phase 8 adds an operations layer around the live engine so the process does not equate “Python is still running” with “the broker state is healthy.”
 
-Implemented:
-- Read-only `live-health` operational command
-- MT5 terminal `connected` and `trade_allowed` health checks
-- Fresh-tick gate using broker `time_msc`
-- Fresh completed-bar gate with a default threshold of 2.5 configured timeframes
-- Retryable `DEGRADED` behavior for stale tick/bar data; the completed bar is **not** marked processed while stale
-- Managed-position integrity checks for:
-  - duplicate positions for one strategy
-  - unknown managed comments
-  - unknown strategy tags
-  - missing stop-loss or take-profit
-- Critical operational anomalies persist `halted=true` and reject new orders
-- Critical integrity anomalies do **not** implicitly flatten positions because broker state is ambiguous and requires operator review
-- Atomic `runtime/live_heartbeat.json` with account, margin, managed positions, data ages and incident state
-- `runtime/live_incidents.csv` incident audit trail with de-duplication
-- MT5 broker deal-history reconciliation using a persistent `last_deal_time_msc` cursor
-- Broker-side profit, commission and swap imported into `RECONCILE_DEAL` audit events
-- Restart-safe deal reconciliation lookback
-- Bounded MT5 reconnect attempts after runtime failures
-- `RUNTIME_ERROR` and `RECONNECT` events recorded in the live audit log
-- After reconnect, the next cycle re-reads broker/account/position state before considering any new order
-- Tests for freshness, position integrity, terminal health, deal cursor behavior and atomic heartbeat writes
+- Read-only `live-health`
+- Terminal connected/trade-permission checks
+- Stale tick and completed-bar rejection
+- Duplicate/unknown managed-position detection
+- Missing SL/TP detection
+- Fail-closed operational halt without guessing which ambiguous positions to flatten
+- Atomic `runtime/live_heartbeat.json`
+- Incident audit log
+- Broker deal-history reconciliation
+- Broker profit / commission / swap captured in audit events
+- Persistent deal cursor
+- Bounded reconnect logic
 
-The default example live configuration remains intentionally small:
+### Phase 9 — Observability & Deployment ✅
 
-```text
-risk_per_trade      0.25%
-max_daily_loss      1.00%
-max_drawdown        5.00%
-max_lot_per_order   0.02
-max_total_lots      0.05
-max_open_positions  3
-max_spread_pips     2.0
-```
+- Separate `src.production` supervisor around guarded live
+- Read-only production health mode
+- Environment-only webhook alerts; no webhook secret in YAML
+- Local JSONL alert outbox + cooldown de-duplication
+- Persistent `runtime/production_halt.json`
+- Dynamic spread baseline and z-score anomaly gate
+- Live slippage reconciliation and hard-cap/statistical anomaly monitoring
+- Broker-clock-ahead guard
+- Managed-stop account margin stress test
+- Runtime log rotation
+- Windows live-supervisor / Task Scheduler templates
+- Production runbook and machine/secrets hardening checklist
 
-These are engineering defaults, not a claim that the risk is acceptable for every account or broker.
+### Phase 10 — External Watchdog & Disaster Recovery ✅
+
+- Independent `src.watchdog` process with **no MT5/order dependency**
+- Local/UNC/shared-file heartbeat source
+- Optional remote heartbeat JSON source through environment variable
+- Optional bearer auth through environment variable
+- Watchdog exit codes: `0=OK`, `2=WARN`, `3=CRITICAL`
+- Detects missing/stale heartbeat, future clock, remote HALT/CRITICAL and critical embedded incidents
+- Separate watchdog alert outbox + cooldown de-duplication
+- Optional external webhook delivery from environment-only secret
+- SHA-256 backup manifest for selected runtime/config/portfolio state
+- Verify-before-restore
+- Preview restore by default
+- Explicit acknowledgement required for in-place restore
+- Deployment-integrity SHA-256 manifest and verification
+- Deterministic soak harness for outage/degraded/clock-jump/recovery paths
+- Independent Windows watchdog Task Scheduler templates
+- CI runs both pytest and an operational soak scenario
+
+See `docs/phase10-watchdog-recovery.md` for the disaster-recovery procedure.
 
 ## Quick start
 
@@ -186,6 +214,8 @@ python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
 copy config.example.yaml config.yaml
+copy production.example.yaml production.yaml
+copy watchdog.example.yaml watchdog.yaml
 ```
 
 List strategies:
@@ -194,178 +224,159 @@ List strategies:
 python -m src.main --mode list-strategies
 ```
 
-Run a synthetic backtest:
+Research / validation examples:
 
 ```bash
 python -m src.main --mode demo-backtest --strategy ema_trend --bars 5000
-```
-
-Run robust validation:
-
-```bash
 python -m src.main --mode validate-mt5 --strategies all --bars 30000 --mc-runs 2000
+python -m src.main --mode portfolio-mt5 --strategies all --bars 40000 --mc-runs 2000
 ```
 
-Build the Phase 5 portfolio:
-
-```bash
-python -m src.main --mode portfolio-mt5 \
-  --strategies all \
-  --bars 40000 \
-  --mc-runs 2000 \
-  --max-strategy-weight 0.35
-```
-
-## Paper trading commands
-
-Synthetic paper smoke test:
-
-```bash
-python -m src.main --mode paper-demo \
-  --strategies ema_trend,trend_breakout,long_term_momentum \
-  --bars 5000
-```
-
-Run one MT5 paper cycle:
+## Paper trading
 
 ```bash
 python -m src.main --mode paper-mt5-once
-```
-
-Run the MT5 paper daemon:
-
-```bash
 python -m src.main --mode paper-mt5-daemon
 ```
 
-By default Phase 6 writes:
+Paper mode uses MT5 market data only and does not expose order execution.
 
-```text
-runtime/paper_state.json
-runtime/paper_events.csv
-```
+## Guarded live and operations
 
-## Guarded live / production operations commands
-
-### 1. Run preflight
-
-`live-preflight` is read-only and does not require the arming phrase:
+Read-only checks:
 
 ```bash
 python -m src.main --mode live-preflight
-```
-
-It checks configuration enablement, terminal connectivity/trading permission, hedging mode, symbol trade availability, tick value, spread, managed exposure and free margin.
-
-### 2. Run operational health
-
-`live-health` is also read-only and does not submit orders:
-
-```bash
 python -m src.main --mode live-health
+python -m src.production --mode health
 ```
 
-It reports terminal status, current spread, tick age, completed-bar age, account equity, managed positions and Phase 8 incidents. Use this before an armed live cycle and when investigating a persisted halt.
-
-### 3. Keep live disabled until paper and operational review are complete
-
-The example config contains:
-
-```yaml
-live:
-  enabled: false
-```
-
-Changing it to `true` is only one of two required gates.
-
-### 4. Run one explicitly armed live cycle
-
-Real-order modes require the exact arming phrase:
+Real-order modes remain explicitly armed:
 
 ```bash
 python -m src.main --mode live-mt5-once \
   --arm-live I_UNDERSTAND_LIVE_TRADING
 ```
 
-### 5. Run a bounded daemon test
+Production-supervised bounded live example:
 
 ```bash
-python -m src.main --mode live-mt5-daemon \
-  --live-max-cycles 3 \
-  --live-poll-seconds 30 \
+python -m src.production \
+  --mode supervised-live \
+  --max-cycles 3 \
+  --poll-seconds 30 \
   --arm-live I_UNDERSTAND_LIVE_TRADING
 ```
 
-Use bounded cycles before considering an unbounded daemon. Runtime MT5 failures trigger only the configured bounded reconnect attempts; exhaustion stops the daemon.
+A Phase 9 production-critical incident creates a persistent halt. Review broker state and runtime logs before clearing it.
 
-### 6. Emergency flatten managed positions
+## Phase 10 watchdog
+
+One independent heartbeat check:
 
 ```bash
-python -m src.main --mode live-flatten \
-  --arm-live I_UNDERSTAND_LIVE_TRADING
+python -m src.watchdog --mode once
 ```
 
-`live-flatten` closes only positions matching the configured symbol and magic number. It does not touch unrelated manual trades or other magic numbers.
+Daemon:
 
-By default live mode reads the frozen Phase 5 bundle:
-
-```text
-results/portfolio/portfolio_weights.csv
-results/portfolio/portfolio_candidates.csv
+```bash
+python -m src.watchdog --mode daemon
 ```
 
-and Phase 8 writes:
+For meaningful protection against total trading-PC failure, run the watchdog on a second machine and point it to a shared/remote heartbeat source.
+
+Environment-only remote source/alert variables:
 
 ```text
-runtime/live_state.json
-runtime/live_events.csv
-runtime/live_heartbeat.json
-runtime/live_incidents.csv
+FOREX_HEARTBEAT_URL
+FOREX_HEARTBEAT_BEARER
+FOREX_WATCHDOG_WEBHOOK_URL
+FOREX_WATCHDOG_WEBHOOK_BEARER
 ```
 
-`live_state.json` now also persists the broker-deal reconciliation cursor. Do not manually clear a Phase 8 operational halt without first reconciling the actual MT5 positions and reviewing the incident log.
+## Backup / restore / integrity
 
-## Deployment discipline
+Create and verify a runtime backup:
 
-Recommended sequence:
+```bash
+python -m src.recovery --mode backup
+python -m src.recovery --mode verify-backup --archive backups/runtime-YYYYMMDD-HHMMSS.zip
+```
+
+Restore into a preview directory first:
+
+```bash
+python -m src.recovery --mode restore-preview \
+  --archive backups/runtime-YYYYMMDD-HHMMSS.zip \
+  --target runtime/restore-preview
+```
+
+In-place restore is separately gated:
+
+```bash
+python -m src.recovery --mode restore-in-place \
+  --archive backups/runtime-YYYYMMDD-HHMMSS.zip \
+  --ack I_UNDERSTAND_RUNTIME_RESTORE
+```
+
+Deployment drift check:
+
+```bash
+python -m src.recovery --mode make-manifest
+python -m src.recovery --mode verify-manifest
+```
+
+SHA-256 detects drift/corruption but is not a substitute for cryptographically signed releases.
+
+## Operational soak
+
+```bash
+python -m src.soak --cycles 2000
+```
+
+The harness verifies heartbeat-timeout detection, recovery, degraded WARN semantics, clock-jump detection and post-incident recovery. It does not replace a real multi-day broker/network soak.
+
+## Recommended rollout
 
 ```text
-Hypothesis
-   ↓
-Backtest
-   ↓
+Research hypothesis
+      ↓
 Robust validation
-   ↓
-Portfolio calibration
-   ↓
-Untouched portfolio OOS
-   ↓
-Persistent MT5 paper-forward test
-   ↓
-Live preflight + live-health
-   ↓
-Review heartbeat / incidents / broker reconciliation
-   ↓
-One armed live cycle at tiny caps
-   ↓
-Bounded supervised live daemon
-   ↓
-Only then consider longer operation
+      ↓
+Portfolio calibration / OOS
+      ↓
+Long MT5 paper-forward run
+      ↓
+Live preflight + operational health
+      ↓
+Production health + baseline collection
+      ↓
+Independent watchdog running
+      ↓
+Backup + restore-preview drill
+      ↓
+Deployment manifest verification
+      ↓
+One explicitly armed tiny live cycle
+      ↓
+Bounded supervised daemon
+      ↓
+Multi-day broker-specific soak
+      ↓
+Only then consider longer unattended operation
 ```
 
-Do not repeatedly change strategy rules, validation gates, portfolio rules or live limits after observing the same holdout/paper results and still treat those observations as independent evidence.
+## Remaining maturity work
 
-## Next production phase
-
-Useful Phase 9 work before unattended operation:
-- external alerts for HALT / CRITICAL / reconnect exhaustion
-- log rotation and archival
-- Windows service / process supervision and startup recovery
-- dynamic spread and realized-slippage baselines with anomaly thresholds
-- deeper local-order versus broker-deal semantic reconciliation
-- account-specific margin stress testing before order submission
-- clock-drift / machine-time monitoring
-- secrets, terminal profile and machine-access hardening
+- Cryptographic release signing with protected/offline signing keys
+- Hosted heartbeat transport with authenticated publishing/acknowledgement
+- Broker-specific swap/financing forecasting and reconciliation policy
+- Broker holiday/weekend calendar semantics
+- Automated backup retention/off-device replication policy
+- Restore-state reconciliation against every broker-side edge case
+- Multi-day broker-specific soak across reconnects, weekend closes and DST/time changes
 
 ## Important
-This project is a research and execution framework, not a guarantee of profit. Leveraged FX/CFD trading can lose money quickly. Spread, slippage, commission, swap, gaps, broker execution, leverage, model error and regime changes can materially alter live results versus research and paper trading.
+
+This project is a research and execution framework, not a guarantee of profit. Leveraged FX/CFD trading can lose money quickly. Spread, slippage, commission, swap, gaps, broker execution, leverage, model error, operational failure and regime change can materially alter live results versus research and paper trading.
