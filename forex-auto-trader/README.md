@@ -1,20 +1,21 @@
 # Forex Auto Trader Research Framework
 
-Personal research framework for automated Forex trading with a focus on reproducible experiments, cost-aware backtests, robust validation, portfolio-level risk control and paper-forward verification.
+Personal research framework for automated Forex trading with reproducible experiments, cost-aware backtests, robust validation, portfolio-level risk control, paper-forward verification and explicitly guarded live execution.
 
 ## Safety defaults
 - Live trading is **disabled by default**.
-- The CLI does not expose live order execution.
-- MT5 paper modes use MT5 **only as a market-data source**.
 - Paper mode never calls `order_send`.
+- Live order execution is exposed only through explicit Phase 7 CLI modes.
+- Real-order modes require **both** `live.enabled: true` and the exact operator arming phrase.
+- Phase 7 supports **MT5 hedging accounts only** so individual strategy positions remain separable.
+- Phase 7 applies per-order lot caps, total managed-lot caps, open-position caps and a maximum-spread gate.
+- Phase 7 uses broker-reported tick size, tick value, volume min/step/max and supported filling checks.
+- Emergency flatten affects only positions for the configured symbol and magic number.
 - Backtests include configurable spread, slippage and commission.
-- Bar-close signals execute on the **next bar open** to avoid same-bar look-ahead optimism.
-- Paper mode follows the same next-bar execution rule.
-- Position sizing is risk-based.
-- Daily loss and max drawdown kill-switches are part of the design.
-- In-sample leaderboard rank is treated only as a screening result, not proof of an edge.
-- A Phase 4 `PASS` is only a research gate. It is not permission to deploy meaningful capital.
-- Portfolio weights are calibrated without using the untouched OOS segment.
+- Bar-close signals execute on the **next bar open** in research/paper models.
+- Live mode evaluates only the newest completed bar and never replays missed historical bars into broker orders.
+- Daily-loss and max-drawdown kill switches are part of paper and live design.
+- A Phase 4 `PASS` remains only a research gate; none of these controls guarantee profitability.
 
 ## Current architecture
 
@@ -30,6 +31,7 @@ forex-auto-trader/
 │  ├─ validation.py
 │  ├─ portfolio.py
 │  ├─ paper.py
+│  ├─ live.py
 │  ├─ risk.py
 │  ├─ backtest.py
 │  ├─ mt5_broker.py
@@ -37,6 +39,7 @@ forex-auto-trader/
 └─ tests/
    ├─ test_backtest_execution.py
    ├─ test_data.py
+   ├─ test_live_guards.py
    ├─ test_paper.py
    ├─ test_portfolio.py
    ├─ test_research.py
@@ -68,21 +71,7 @@ forex-auto-trader/
 - MT5 cache command
 
 ### Phase 3 — Strategy Factory + Batch Research ✅
-The registry currently contains 13 testable hypotheses across multiple families:
-
-- `ema_trend`
-- `sma_trend`
-- `donchian_breakout`
-- `bollinger_reversion`
-- `rsi_reversion`
-- `momentum`
-- `macd_trend`
-- `ema_pullback`
-- `volatility_breakout`
-- `zscore_reversion`
-- `trend_breakout`
-- `range_reversion`
-- `long_term_momentum`
+The registry currently contains 13 testable hypotheses across trend, breakout, momentum and mean-reversion families.
 
 Every strategy returns the same contract:
 
@@ -93,72 +82,80 @@ take_profit_distance   price distance
 ```
 
 ### Phase 4 — Robust Validation ✅
-Phase 4 attempts to reject fragile backtests before paper trading.
-
-Implemented checks:
 - Chronological Train / Validation / untouched Out-of-Sample split
-- Local parameter-neighborhood search instead of unrestricted optimization
+- Local parameter-neighborhood search
 - Validation-weighted parameter selection
-- Rolling walk-forward re-selection and forward evaluation
-- Parameter-stability analysis around the selected configuration
-- Bootstrap/Monte Carlo trade-path simulation
-- Approximate loss probability, ruin probability and 95th-percentile drawdown
-- Sharpe decay from Train to Out-of-Sample
-- Automated research verdict: `PASS`, `WATCH`, `REJECT`, or `ERROR`
-
-The default research gate checks:
-
-```text
-OOS minimum trade count
-OOS profit factor
-OOS Sharpe
-OOS max drawdown
-Walk-forward positive-window fraction
-Parameter stability fraction
-Monte Carlo ruin probability
-```
+- Rolling walk-forward evaluation
+- Parameter-stability analysis
+- Bootstrap / Monte Carlo trade-path simulation
+- Sharpe decay from Train to OOS
+- Automated `PASS`, `WATCH`, `REJECT`, or `ERROR` verdict
 
 ### Phase 5 — Portfolio Research ✅
-Phase 5 combines multiple validated strategies rather than betting on one backtest winner.
-
-Implemented:
 - Phase 4 verdict gate before portfolio inclusion
-- Strategy equity-curve / return correlation matrix
+- Strategy return-correlation analysis
 - Inverse-volatility allocation with absolute-correlation penalty
 - Maximum strategy-weight constraint
-- Portfolio risk-contribution analysis
-- Portfolio diversification ratio
-- Effective number of strategies (concentration metric)
-- Untouched OOS portfolio evaluation with frozen weights
-- Portfolio-level Sharpe, volatility and max drawdown
-- Block-bootstrap Monte Carlo for portfolio path risk
-- Portfolio loss probability and ruin probability
+- Risk-contribution and diversification metrics
+- Frozen weights evaluated on untouched OOS data
+- Portfolio-level Sharpe, volatility, max drawdown and Monte Carlo path risk
 - CSV exports for weights, candidates, correlation, OOS equity and summary
 
-The allocation is intentionally simple and transparent. It does **not** maximize historical Sharpe, because unconstrained optimizers are highly sensitive to estimation error and can create unstable weights.
-
 ### Phase 6 — MT5 Paper Trading ✅
-Phase 6 forward-tests the Phase 5 portfolio without sending real orders.
-
-Implemented:
-- Persistent JSON state with atomic writes
-- Restart-safe `last_bar_time` checkpointing
-- Idempotent processing so already-processed bars are not traded twice
-- Phase 5 `portfolio_weights.csv` + `portfolio_candidates.csv` loader
-- Uses the same selected strategy parameters and frozen weights from Phase 5
-- Signal-at-close → next-completed-bar-open execution
-- Fixed spread/slippage/commission paper fills
+- Persistent atomic JSON state
+- Restart-safe `last_bar_time`
+- Idempotent processing
+- Loads Phase 5 portfolio weights and selected parameters
+- Signal-at-close → next-completed-bar-open simulation
+- Spread/slippage/commission paper fills
 - Gap stop / gap take-profit handling
 - Portfolio mark-to-market equity
-- Daily-loss and max-drawdown portfolio kill switch
-- Hard paper halt after a risk breach
-- CSV event audit trail for `SIGNAL`, `ENTRY`, `EXIT`, and `HALT`
-- Simulated forward slippage field in every entry/exit event
-- MT5 completed-bar filter so the currently-forming candle is not traded
-- `paper-demo`, `paper-mt5-once`, and `paper-mt5-daemon` modes
-- Restart/idempotence/next-bar execution tests
+- Daily-loss and max-drawdown kill switch
+- Persistent hard halt after a breach
+- CSV event audit trail
+- MT5 completed-bar filter
+- `paper-demo`, `paper-mt5-once`, and `paper-mt5-daemon`
 
-Paper mode deliberately does not expose a broker execution path. The existing guarded MT5 `market_order()` adapter remains separate and cannot be reached from the Phase 6 CLI.
+### Phase 7 — Guarded Small Live Deployment ✅
+Phase 7 adds a deliberately constrained real-order path instead of turning paper mode directly into live mode.
+
+Implemented:
+- Broker-native symbol specification via MT5:
+  - `trade_tick_size`
+  - `trade_tick_value_loss` / tick value fallback
+  - contract size
+  - volume min / step / max
+  - digits / point / pip-size derivation
+- Risk sizing based on broker tick value rather than a generic `$10/pip` assumption
+- MT5 `order_check()` before every order
+- Filling-mode fallback checks before `order_send`
+- Hedging-account requirement for strategy-level position separation
+- Strategy tagging via magic number + `fat:<strategy>` comment
+- Per-order lot cap
+- Total managed-lot cap
+- Managed open-position cap
+- Maximum spread gate
+- Daily-loss and max-drawdown hard halt
+- Emergency flatten for managed positions
+- Persistent live state and CSV audit log
+- No historical-order replay after restart
+- Read-only `live-preflight`
+- Explicit operator arming requirement
+- `live-mt5-once`, `live-mt5-daemon`, and `live-flatten`
+
+The default example configuration is intentionally very small:
+
+```text
+risk_per_trade      0.25%
+max_daily_loss      1.00%
+max_drawdown        5.00%
+max_lot_per_order   0.02
+max_total_lots      0.05
+max_open_positions  3
+max_spread_pips     2.0
+```
+
+These are engineering defaults, not a claim that the risk is acceptable for every account or broker.
 
 ## Quick start
 
@@ -176,53 +173,19 @@ List strategies:
 python -m src.main --mode list-strategies
 ```
 
-Run one synthetic-data backtest:
+Run a synthetic backtest:
 
 ```bash
 python -m src.main --mode demo-backtest --strategy ema_trend --bars 5000
 ```
 
-Run all strategies on the same synthetic sample:
-
-```bash
-python -m src.main --mode batch-demo --strategies all --bars 10000
-```
-
-Run all strategies on MT5 history:
-
-```bash
-python -m src.main --mode batch-mt5 --strategies all --bars 20000
-```
-
-Cache MT5 history locally:
-
-```bash
-python -m src.main --mode cache-mt5 --bars 50000
-```
-
-## Robust validation commands
-
-Validate one candidate on synthetic regime-changing data:
-
-```bash
-python -m src.main --mode validate-demo --strategies ema_trend --bars 8000
-```
-
-Validate a shortlist:
-
-```bash
-python -m src.main --mode validate-demo --strategies ema_trend,trend_breakout,long_term_momentum --bars 12000
-```
-
-Validate all registered strategies on MT5 history:
+Run robust validation:
 
 ```bash
 python -m src.main --mode validate-mt5 --strategies all --bars 30000 --mc-runs 2000
 ```
 
-## Portfolio research commands
-
-Build a portfolio from strategies that receive `PASS` or `WATCH` under Phase 4:
+Build the Phase 5 portfolio:
 
 ```bash
 python -m src.main --mode portfolio-mt5 \
@@ -232,19 +195,9 @@ python -m src.main --mode portfolio-mt5 \
   --max-strategy-weight 0.35
 ```
 
-Portfolio reports are written by default to:
-
-```text
-results/portfolio/portfolio_summary.csv
-results/portfolio/portfolio_weights.csv
-results/portfolio/strategy_correlation.csv
-results/portfolio/portfolio_candidates.csv
-results/portfolio/portfolio_oos_equity.csv
-```
-
 ## Paper trading commands
 
-Smoke-test the paper engine on synthetic data without needing Phase 5 files:
+Synthetic paper smoke test:
 
 ```bash
 python -m src.main --mode paper-demo \
@@ -252,27 +205,88 @@ python -m src.main --mode paper-demo \
   --bars 5000
 ```
 
-Run exactly one MT5 paper polling cycle using the Phase 5 portfolio files:
+Run one MT5 paper cycle:
 
 ```bash
 python -m src.main --mode paper-mt5-once
 ```
 
-Run the MT5 paper daemon until Ctrl+C:
+Run the MT5 paper daemon:
 
 ```bash
 python -m src.main --mode paper-mt5-daemon
 ```
 
-Run a bounded daemon test for 5 polling cycles:
+By default Phase 6 writes:
 
-```bash
-python -m src.main --mode paper-mt5-daemon \
-  --paper-max-cycles 5 \
-  --paper-poll-seconds 10
+```text
+runtime/paper_state.json
+runtime/paper_events.csv
 ```
 
-By default Phase 6 reads:
+## Guarded live commands
+
+### 1. Run preflight first
+
+`live-preflight` is read-only and does not require the arming phrase:
+
+```bash
+python -m src.main --mode live-preflight
+```
+
+It checks:
+- `live.enabled`
+- hedging account mode
+- symbol trade availability
+- usable tick value / tick size
+- current spread
+- managed position count
+- total managed lots
+- positive free margin
+
+A failed preflight is a stop condition, not something to bypass.
+
+### 2. Keep live disabled until paper review is complete
+
+The example config contains:
+
+```yaml
+live:
+  enabled: false
+```
+
+Changing it to `true` is only one of two required gates.
+
+### 3. Run one explicitly armed live cycle
+
+Real-order modes require the exact arming phrase:
+
+```bash
+python -m src.main --mode live-mt5-once \
+  --arm-live I_UNDERSTAND_LIVE_TRADING
+```
+
+### 4. Run a bounded daemon test
+
+```bash
+python -m src.main --mode live-mt5-daemon \
+  --live-max-cycles 3 \
+  --live-poll-seconds 30 \
+  --arm-live I_UNDERSTAND_LIVE_TRADING
+```
+
+Use bounded cycles before considering an unbounded daemon.
+
+### 5. Emergency flatten managed positions
+
+```bash
+python -m src.main --mode live-flatten \
+  --arm-live I_UNDERSTAND_LIVE_TRADING
+```
+
+`live-flatten` closes only positions matching the configured symbol and magic number. It does not touch unrelated manual trades or other magic numbers.
+
+By default Phase 7 reads the same frozen Phase 5 bundle:
 
 ```text
 results/portfolio/portfolio_weights.csv
@@ -282,61 +296,53 @@ results/portfolio/portfolio_candidates.csv
 and writes:
 
 ```text
-runtime/paper_state.json
-runtime/paper_events.csv
+runtime/live_state.json
+runtime/live_events.csv
 ```
 
-The state file is persistent. Starting `paper-mt5-daemon` again continues from `last_bar_time` instead of replaying already-processed bars.
+## Deployment discipline
 
-If the portfolio kill switch fires, `halted=true` is persisted and the daemon stops. Treat that as an incident requiring review; do not simply edit the state file to force it back on without understanding the breach.
-
-## Research discipline
-
-Do **not** select a strategy for live trading because it tops the current leaderboard. Testing many hypotheses creates multiple-testing and overfitting risk. The untouched Out-of-Sample segment should not be repeatedly reused for strategy development after its result is observed.
-
-Portfolio weights are estimated from the pre-OOS segment only. The OOS segment is then used to evaluate the frozen portfolio. If portfolio rules are changed after looking at OOS results, that OOS segment is no longer genuinely untouched and a new holdout period is required.
-
-Recommended workflow:
+Recommended sequence:
 
 ```text
 Hypothesis
    ↓
-In-sample screening
+Backtest
    ↓
-Train / Validation selection
+Robust validation
    ↓
-Walk-forward + stability checks
-   ↓
-PASS / WATCH / REJECT
-   ↓
-Pre-OOS portfolio calibration
-   ↓
-Freeze strategy set + weights
+Portfolio calibration
    ↓
 Untouched portfolio OOS
    ↓
-Portfolio Monte Carlo / risk review
-   ↓
 Persistent MT5 paper-forward test
    ↓
-Compare expected vs simulated execution
+Review execution / slippage / incidents
    ↓
-Only consider guarded live if paper behavior remains credible
+Live preflight
+   ↓
+One armed live cycle at tiny caps
+   ↓
+Bounded live daemon
+   ↓
+Only then consider longer operation
 ```
 
-## Next phase
+Do not repeatedly change strategy rules, validation gates, portfolio rules or live limits after observing the same holdout/paper results and still treat those observations as independent evidence.
 
-### Phase 7 — Guarded Small Live Deployment
-Before enabling any live order path, the framework still needs:
-- Broker-specific symbol/tick-value position sizing instead of a generic `$10/pip` assumption
-- Lot-step/min/max-volume validation from MT5 symbol metadata
-- Broker-supported filling-mode selection
-- Dynamic spread and swap accounting
-- Live/paper reconciliation
-- Portfolio-level exposure and leverage caps
-- Emergency flatten / kill switch
-- Explicit operator arming step
-- Very small initial capital and reversible deployment
+## Remaining production hardening
+
+Phase 7 is intentionally small and reversible. Before treating the system as production-grade, additional work should include:
+- dynamic broker spread/slippage statistics rather than only a hard spread cap
+- swap / overnight financing reconciliation
+- broker-side deal-history reconciliation against local event logs
+- duplicate/missing position incident detection
+- stale-market / stale-bar rejection
+- disconnect and reconnect health monitoring
+- alerting to an external channel
+- deployment packaging / Windows service supervision
+- account-specific margin stress tests
+- secrets and machine-access hardening
 
 ## Important
-This project is a research framework, not a guarantee of profit. Leveraged FX/CFD trading can lose money quickly. Spread, slippage, commission, swap, gaps, execution quality, leverage, model error and regime changes can materially alter live results versus backtests.
+This project is a research and execution framework, not a guarantee of profit. Leveraged FX/CFD trading can lose money quickly. Spread, slippage, commission, swap, gaps, broker execution, leverage, model error and regime changes can materially alter live results versus research and paper trading.
