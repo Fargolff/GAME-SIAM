@@ -1,15 +1,17 @@
 # Forex Auto Trader Research Framework
 
-Personal research framework for automated Forex trading with a focus on reproducible experiments, cost-aware backtests and strict risk controls.
+Personal research framework for automated Forex trading with a focus on reproducible experiments, cost-aware backtests, robust validation and portfolio-level risk control.
 
 ## Safety defaults
 - Live trading is **disabled by default**.
 - The CLI does not expose live order execution.
 - Backtests include configurable spread, slippage and commission.
+- Bar-close signals execute on the **next bar open** to avoid same-bar look-ahead optimism.
 - Position sizing is risk-based.
 - Daily loss and max drawdown kill-switches are part of the design.
 - In-sample leaderboard rank is treated only as a screening result, not proof of an edge.
 - A Phase 4 `PASS` is only a research gate. It is not permission to deploy meaningful capital.
+- Portfolio weights are calibrated without using the untouched OOS segment.
 
 ## Current architecture
 
@@ -23,12 +25,15 @@ forex-auto-trader/
 │  ├─ strategy.py
 │  ├─ research.py
 │  ├─ validation.py
+│  ├─ portfolio.py
 │  ├─ risk.py
 │  ├─ backtest.py
 │  ├─ mt5_broker.py
 │  └─ main.py
 └─ tests/
+   ├─ test_backtest_execution.py
    ├─ test_data.py
+   ├─ test_portfolio.py
    ├─ test_research.py
    ├─ test_risk.py
    ├─ test_strategy_factory.py
@@ -44,6 +49,9 @@ forex-auto-trader/
 - Daily-loss and drawdown kill switches
 - MT5 market-data adapter
 - Conservative same-bar stop/TP handling
+- Gap-stop handling
+- Next-bar execution for bar-close signals
+- End-of-sample position realization
 - Timeframe-aware Sharpe annualization
 
 ### Phase 2 — Data Engine ✅
@@ -79,13 +87,10 @@ stop_distance          price distance
 take_profit_distance   price distance
 ```
 
-This allows the same backtest engine to compare hypotheses without strategy-specific execution code.
-
 ### Phase 4 — Robust Validation ✅
 Phase 4 attempts to reject fragile backtests before paper trading.
 
 Implemented checks:
-
 - Chronological Train / Validation / untouched Out-of-Sample split
 - Local parameter-neighborhood search instead of unrestricted optimization
 - Validation-weighted parameter selection
@@ -108,7 +113,24 @@ Parameter stability fraction
 Monte Carlo ruin probability
 ```
 
-A strategy can still fail live after passing these tests. Regime change, broker execution, swap, spread expansion, gaps and model error remain material risks.
+### Phase 5 — Portfolio Research ✅
+Phase 5 combines multiple validated strategies rather than betting on one backtest winner.
+
+Implemented:
+- Phase 4 verdict gate before portfolio inclusion
+- Strategy equity-curve / return correlation matrix
+- Inverse-volatility allocation with absolute-correlation penalty
+- Maximum strategy-weight constraint
+- Portfolio risk-contribution analysis
+- Portfolio diversification ratio
+- Effective number of strategies (concentration metric)
+- Untouched OOS portfolio evaluation with frozen weights
+- Portfolio-level Sharpe, volatility and max drawdown
+- Block-bootstrap Monte Carlo for portfolio path risk
+- Portfolio loss probability and ruin probability
+- CSV exports for weights, candidates, correlation, OOS equity and summary
+
+The allocation is intentionally simple and transparent. It does **not** maximize historical Sharpe, because unconstrained optimizers are highly sensitive to estimation error and can create unstable weights.
 
 ## Quick start
 
@@ -183,27 +205,62 @@ python -m src.main --mode validate-mt5 \
   --mc-runs 3000
 ```
 
-Phase 3 batch results are exported by default to:
+## Portfolio research commands
+
+Build a portfolio from strategies that receive `PASS` or `WATCH` under Phase 4:
+
+```bash
+python -m src.main --mode portfolio-mt5 \
+  --strategies all \
+  --bars 40000 \
+  --mc-runs 2000 \
+  --max-strategy-weight 0.35
+```
+
+Run the same pipeline on synthetic data:
+
+```bash
+python -m src.main --mode portfolio-demo \
+  --strategies all \
+  --bars 15000
+```
+
+For a pure pipeline smoke test, including rejected hypotheses is possible but should not be used as evidence of a deployable portfolio:
+
+```bash
+python -m src.main --mode portfolio-demo \
+  --strategies all \
+  --bars 15000 \
+  --portfolio-verdicts PASS,WATCH,REJECT
+```
+
+Portfolio reports are written by default to:
+
+```text
+results/portfolio/portfolio_summary.csv
+results/portfolio/portfolio_weights.csv
+results/portfolio/strategy_correlation.csv
+results/portfolio/portfolio_candidates.csv
+results/portfolio/portfolio_oos_equity.csv
+```
+
+Phase 3 batch results:
 
 ```text
 results/strategy_leaderboard.csv
 ```
 
-Phase 4 robust validation results are exported by default to:
+Phase 4 validation results:
 
 ```text
 results/robust_validation.csv
 ```
 
-## How to interpret Phase 4
-
-`PASS` means the candidate cleared all configured research checks on the supplied dataset. `WATCH` means it is close but has one or two material weaknesses. `REJECT` means several robustness checks failed. `ERROR` means the experiment itself could not be evaluated.
-
-Do not repeatedly change thresholds until a strategy passes. That simply moves overfitting from the strategy parameters into the validation rules.
-
 ## Research discipline
 
 Do **not** select a strategy for live trading because it tops the current leaderboard. Testing many hypotheses creates multiple-testing and overfitting risk. The untouched Out-of-Sample segment should not be repeatedly reused for strategy development after its result is observed.
+
+Portfolio weights are estimated from the pre-OOS segment only. The OOS segment is then used to evaluate the frozen portfolio. If portfolio rules are changed after looking at OOS results, that OOS segment is no longer genuinely untouched and a new holdout period is required.
 
 Recommended workflow:
 
@@ -214,36 +271,34 @@ In-sample screening
    ↓
 Train / Validation selection
    ↓
-Untouched Out-of-Sample
-   ↓
-Walk-forward consistency
-   ↓
-Parameter stability
-   ↓
-Monte Carlo path risk
+Walk-forward + stability checks
    ↓
 PASS / WATCH / REJECT
+   ↓
+Pre-OOS portfolio calibration
+   ↓
+Freeze strategy set + weights
+   ↓
+Untouched portfolio OOS
+   ↓
+Portfolio Monte Carlo / risk review
    ↓
 Paper trading only if still credible
 ```
 
 ## Next phases
 
-### Phase 5 — Portfolio Research
-- Correlation between strategy equity curves
-- Strategy diversification
-- Risk budgeting
-- Portfolio-level drawdown controls
-- Avoid stacking multiple versions of the same hidden risk exposure
-
 ### Phase 6 — Paper Trading
-- MT5 paper daemon
+- MT5 paper-trading daemon
+- Persistent position/order state
 - Broker execution logging
 - Backtest-vs-forward slippage comparison
-- Health monitoring and alerting
+- Health monitoring and alerts
+- Restart/recovery handling
+- Paper-trading portfolio risk controls
 
 ### Phase 7 — Guarded Small Live Deployment
 Only after robust out-of-sample and paper validation. Live trading should remain small, capped and reversible with hard kill switches.
 
 ## Important
-This project is a research framework, not a guarantee of profit. Leveraged FX/CFD trading can lose money quickly. Spread, slippage, commission, swap, gaps, execution quality, leverage and regime changes can materially alter live results versus backtests.
+This project is a research framework, not a guarantee of profit. Leveraged FX/CFD trading can lose money quickly. Spread, slippage, commission, swap, gaps, execution quality, leverage, model error and regime changes can materially alter live results versus backtests.
