@@ -37,4 +37,6 @@ jobs:
           python -m pip install "pandas>=2.2" "numpy>=2.0" "PyYAML>=6.0" "pytest>=8.0"
 
       - name: Run tests
-        run: pytest -q
+        env:
+          PYTHONPATH: .
+        run: python -m pytest -q
