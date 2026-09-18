@@ -22,6 +22,16 @@ strategy:
     stop_atr: 2.0
     take_profit_atr: 3.0
 
+# Phase 6 paper trading consumes the Phase 5 portfolio files.
+# MT5 is used only for market data; no real order is sent.
+paper:
+  state_path: runtime/paper_state.json
+  events_path: runtime/paper_events.csv
+  weights_path: results/portfolio/portfolio_weights.csv
+  candidates_path: results/portfolio/portfolio_candidates.csv
+  poll_seconds: 30
+  history_bars: 5000
+
 live:
   enabled: false
   magic: 56001
