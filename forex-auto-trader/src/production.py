@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 import csv
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
 import math
@@ -92,18 +92,15 @@ def rotate_file(path: str | Path, max_bytes: int, backups: int) -> bool:
     target = Path(path)
     if not target.exists() or target.stat().st_size < max_bytes:
         return False
-    for index in range(backups, 0, -1):
-        source = target.with_name(f"{target.name}.{index}") if index > 1 else target
+    oldest = target.with_name(f"{target.name}.{backups}")
+    if oldest.exists():
+        oldest.unlink()
+    for index in range(backups - 1, 0, -1):
+        source = target.with_name(f"{target.name}.{index}")
         destination = target.with_name(f"{target.name}.{index + 1}")
-        if index == backups:
-            oldest = target.with_name(f"{target.name}.{backups}")
-            if oldest.exists():
-                oldest.unlink()
         if source.exists():
-            if index == 1:
-                source.replace(target.with_name(f"{target.name}.1"))
-            else:
-                source.replace(destination)
+            source.replace(destination)
+    target.replace(target.with_name(f"{target.name}.1"))
     return True
 
 
