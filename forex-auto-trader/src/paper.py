@@ -111,6 +111,45 @@ class PaperEventLog:
             writer.writerow(payload)
 
 
+def load_portfolio_bundle(
+    weights_path: str | Path,
+    candidates_path: str | Path,
+) -> tuple[dict[str, dict[str, Any]], dict[str, float]]:
+    weights_file = Path(weights_path)
+    candidates_file = Path(candidates_path)
+    if not weights_file.exists():
+        raise FileNotFoundError(f"portfolio weights not found: {weights_file}")
+    if not candidates_file.exists():
+        raise FileNotFoundError(f"portfolio candidates not found: {candidates_file}")
+
+    weights_frame = pd.read_csv(weights_file)
+    candidates_frame = pd.read_csv(candidates_file)
+    if not {"strategy", "weight"}.issubset(weights_frame.columns):
+        raise ValueError("portfolio weights file requires strategy and weight columns")
+    if "strategy" not in candidates_frame.columns or "selected_params" not in candidates_frame.columns:
+        raise ValueError("portfolio candidates file requires strategy and selected_params columns")
+
+    active = weights_frame.loc[weights_frame["weight"] > 0, ["strategy", "weight"]].copy()
+    if active.empty:
+        raise ValueError("portfolio weights contain no active strategy")
+
+    params_by_strategy: dict[str, dict[str, Any]] = {}
+    candidate_rows = candidates_frame.drop_duplicates("strategy", keep="first").set_index("strategy")
+    for strategy in active["strategy"]:
+        if strategy not in candidate_rows.index:
+            raise ValueError(f"missing candidate parameters for {strategy}")
+        raw = candidate_rows.loc[strategy, "selected_params"]
+        if pd.isna(raw) or not str(raw).strip():
+            raise ValueError(f"selected_params is missing for {strategy}")
+        parsed = json.loads(str(raw))
+        if not isinstance(parsed, dict):
+            raise ValueError(f"selected_params for {strategy} must decode to an object")
+        params_by_strategy[str(strategy)] = parsed
+
+    weights = {str(row.strategy): float(row.weight) for row in active.itertuples(index=False)}
+    return params_by_strategy, weights
+
+
 class PaperTradingEngine:
     """Stateful paper execution engine.
 
@@ -213,7 +252,10 @@ class PaperTradingEngine:
     ) -> None:
         if self.state.halted or side not in (-1, 1) or stop_distance <= 0 or take_profit_distance <= 0:
             return
-        strategy_risk = self.config.risk_per_trade * self.weights[strategy]
+        weight = self.weights[strategy]
+        if weight <= 0:
+            return
+        strategy_risk = self.config.risk_per_trade * weight
         lots = position_size_lots(
             equity=max(self.state.equity, 0.0),
             risk_per_trade=strategy_risk,
