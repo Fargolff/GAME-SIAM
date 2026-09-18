@@ -34,16 +34,42 @@ class Trade:
     reason: str
 
 
-def _entry_price(close: float, side: int, cfg: BacktestConfig) -> float:
+def _entry_price(raw_price: float, side: int, cfg: BacktestConfig) -> float:
     half_spread = (cfg.spread_pips * cfg.pip_size) / 2
     slip = cfg.slippage_pips * cfg.pip_size
-    return close + side * (half_spread + slip)
+    return raw_price + side * (half_spread + slip)
 
 
-def _exit_price(close: float, side: int, cfg: BacktestConfig) -> float:
+def _exit_price(raw_price: float, side: int, cfg: BacktestConfig) -> float:
     half_spread = (cfg.spread_pips * cfg.pip_size) / 2
     slip = cfg.slippage_pips * cfg.pip_size
-    return close - side * (half_spread + slip)
+    return raw_price - side * (half_spread + slip)
+
+
+def _close_position(
+    position: dict,
+    raw_exit: float,
+    exit_time: pd.Timestamp,
+    reason: str,
+    cfg: BacktestConfig,
+) -> Trade:
+    side = int(position["side"])
+    exit_price = _exit_price(float(raw_exit), side, cfg)
+    price_delta = (exit_price - float(position["entry"])) * side
+    pnl_pips = price_delta / cfg.pip_size
+    gross = pnl_pips * cfg.pip_value_per_lot * float(position["lots"])
+    commission = cfg.commission_per_lot_round_turn * float(position["lots"])
+    pnl = gross - commission
+    return Trade(
+        entry_time=position["entry_time"],
+        exit_time=exit_time,
+        side=side,
+        entry=float(position["entry"]),
+        exit=exit_price,
+        lots=float(position["lots"]),
+        pnl=float(pnl),
+        reason=reason,
+    )
 
 
 def run_backtest(df: pd.DataFrame, cfg: BacktestConfig) -> dict:
@@ -53,12 +79,15 @@ def run_backtest(df: pd.DataFrame, cfg: BacktestConfig) -> dict:
         raise ValueError(f"missing columns: {sorted(missing)}")
     if cfg.periods_per_year <= 0:
         raise ValueError("periods_per_year must be positive")
+    if cfg.pip_size <= 0 or cfg.pip_value_per_lot <= 0:
+        raise ValueError("pip_size and pip_value_per_lot must be positive")
 
     equity = cfg.initial_equity
     peak_equity = equity
     start_of_day_equity = equity
     current_day = None
-    position = None
+    position: dict | None = None
+    pending_signal: dict | None = None
     trades: list[Trade] = []
     equity_curve: list[tuple[pd.Timestamp, float]] = []
 
@@ -74,81 +103,115 @@ def run_backtest(df: pd.DataFrame, cfg: BacktestConfig) -> dict:
             current_day = day
             start_of_day_equity = equity
 
-        killed, _reason = kill_switch_triggered(start_of_day_equity, peak_equity, equity, limits)
+        killed, kill_reason = kill_switch_triggered(start_of_day_equity, peak_equity, equity, limits)
+        raw_open = float(row["open"])
+
         if killed:
+            pending_signal = None
+            if position is not None:
+                trade = _close_position(position, raw_open, ts, f"kill_switch_{kill_reason}", cfg)
+                equity += trade.pnl
+                trades.append(trade)
+                position = None
+                peak_equity = max(peak_equity, equity)
             equity_curve.append((ts, equity))
             continue
 
-        if position is not None:
-            side = position["side"]
-            stop = position["stop"]
-            tp = position["tp"]
-            exit_reason = None
-            raw_exit = None
+        # A signal is only known after its source bar closes. Therefore a signal
+        # generated on bar t is executed at bar t+1 open. This prevents same-bar
+        # look-ahead optimism and also makes reversals explicit.
+        if pending_signal is not None:
+            pending_side = int(pending_signal["side"])
+            if position is not None and int(position["side"]) == -pending_side:
+                trade = _close_position(position, raw_open, ts, "opposite_signal", cfg)
+                equity += trade.pnl
+                trades.append(trade)
+                position = None
+                peak_equity = max(peak_equity, equity)
 
-            # Stop is checked first when both stop and take-profit are touched inside
-            # the same OHLC bar. This is intentionally conservative because intrabar
-            # path is unknown without higher-frequency data.
+            if position is None:
+                stop_distance = float(pending_signal["stop_distance"])
+                tp_distance = float(pending_signal["take_profit_distance"])
+                lots = position_size_lots(
+                    equity=equity,
+                    risk_per_trade=cfg.risk_per_trade,
+                    stop_distance_price=stop_distance,
+                    pip_size=cfg.pip_size,
+                    pip_value_per_lot=cfg.pip_value_per_lot,
+                )
+                if lots > 0 and stop_distance > 0 and tp_distance > 0:
+                    entry = _entry_price(raw_open, pending_side, cfg)
+                    position = {
+                        "entry_time": ts,
+                        "side": pending_side,
+                        "entry": entry,
+                        "lots": lots,
+                        "stop": entry - pending_side * stop_distance,
+                        "tp": entry + pending_side * tp_distance,
+                    }
+            pending_signal = None
+
+        # Stop is checked before take-profit when both are touched inside one OHLC
+        # bar. Without intrabar data that is the conservative path assumption.
+        if position is not None:
+            side = int(position["side"])
+            stop = float(position["stop"])
+            tp = float(position["tp"])
+            raw_exit: float | None = None
+            exit_reason: str | None = None
+
             if side > 0:
-                if row["low"] <= stop:
+                if raw_open <= stop:
+                    raw_exit, exit_reason = raw_open, "stop_gap"
+                elif float(row["low"]) <= stop:
                     raw_exit, exit_reason = stop, "stop"
-                elif row["high"] >= tp:
+                elif raw_open >= tp:
+                    raw_exit, exit_reason = tp, "take_profit"
+                elif float(row["high"]) >= tp:
                     raw_exit, exit_reason = tp, "take_profit"
             else:
-                if row["high"] >= stop:
+                if raw_open >= stop:
+                    raw_exit, exit_reason = raw_open, "stop_gap"
+                elif float(row["high"]) >= stop:
                     raw_exit, exit_reason = stop, "stop"
-                elif row["low"] <= tp:
+                elif raw_open <= tp:
+                    raw_exit, exit_reason = tp, "take_profit"
+                elif float(row["low"]) <= tp:
                     raw_exit, exit_reason = tp, "take_profit"
 
-            if exit_reason is None and int(row["signal"]) == -side:
-                raw_exit, exit_reason = float(row["close"]), "opposite_signal"
-
-            if exit_reason is not None:
-                exit_price = _exit_price(float(raw_exit), side, cfg)
-                price_delta = (exit_price - position["entry"]) * side
-                pnl_pips = price_delta / cfg.pip_size
-                gross = pnl_pips * cfg.pip_value_per_lot * position["lots"]
-                commission = cfg.commission_per_lot_round_turn * position["lots"]
-                pnl = gross - commission
-                equity += pnl
-                trades.append(
-                    Trade(
-                        entry_time=position["entry_time"],
-                        exit_time=ts,
-                        side=side,
-                        entry=position["entry"],
-                        exit=exit_price,
-                        lots=position["lots"],
-                        pnl=pnl,
-                        reason=exit_reason,
-                    )
-                )
+            if exit_reason is not None and raw_exit is not None:
+                trade = _close_position(position, raw_exit, ts, exit_reason, cfg)
+                equity += trade.pnl
+                trades.append(trade)
                 position = None
                 peak_equity = max(peak_equity, equity)
 
         signal = int(row["signal"])
-        if position is None and signal != 0 and pd.notna(row["stop_distance"]):
+        if signal != 0 and pd.notna(row["stop_distance"]) and pd.notna(row["take_profit_distance"]):
             stop_distance = float(row["stop_distance"])
             tp_distance = float(row["take_profit_distance"])
-            lots = position_size_lots(
-                equity=equity,
-                risk_per_trade=cfg.risk_per_trade,
-                stop_distance_price=stop_distance,
-                pip_size=cfg.pip_size,
-                pip_value_per_lot=cfg.pip_value_per_lot,
-            )
-            if lots > 0:
-                entry = _entry_price(float(row["close"]), signal, cfg)
-                position = {
-                    "entry_time": ts,
+            if stop_distance > 0 and tp_distance > 0:
+                pending_signal = {
                     "side": signal,
-                    "entry": entry,
-                    "lots": lots,
-                    "stop": entry - signal * stop_distance,
-                    "tp": entry + signal * tp_distance,
+                    "stop_distance": stop_distance,
+                    "take_profit_distance": tp_distance,
+                    "signal_time": ts,
                 }
 
         equity_curve.append((ts, equity))
+
+    # Realize the final open position so summary metrics do not silently omit a
+    # remaining trade at the end of the test sample. A signal on the final bar is
+    # not entered because no next-bar execution price exists.
+    if position is not None and len(df) > 0:
+        final_ts = df.index[-1]
+        final_close = float(df.iloc[-1]["close"])
+        trade = _close_position(position, final_close, final_ts, "end_of_test", cfg)
+        equity += trade.pnl
+        trades.append(trade)
+        peak_equity = max(peak_equity, equity)
+        if equity_curve:
+            equity_curve[-1] = (final_ts, equity)
 
     curve = pd.Series(
         [x[1] for x in equity_curve],
