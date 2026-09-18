@@ -10,6 +10,7 @@ from .backtest import BacktestConfig, run_backtest
 from .config import load_config
 from .data import MarketDataStore, normalize_ohlc
 from .mt5_broker import MT5Broker
+from .portfolio import PortfolioConfig, research_portfolio, save_portfolio_report
 from .research import run_strategy_batch, save_research_results
 from .strategy import available_strategies, build_signals, strategy_spec
 from .validation import ValidationConfig, validate_strategy_batch
@@ -79,6 +80,17 @@ def _selected_strategy_names(value: str) -> list[str]:
     return names
 
 
+def _validation_config(args) -> ValidationConfig:
+    return ValidationConfig(
+        walk_forward_train_bars=args.wf_train_bars,
+        walk_forward_test_bars=args.wf_test_bars,
+        walk_forward_step_bars=args.wf_step_bars,
+        parameter_perturbation=args.param_perturbation,
+        monte_carlo_runs=args.mc_runs,
+        seed=args.seed,
+    )
+
+
 def print_report(result: dict, strategy_name: str) -> None:
     print(f"\n=== BACKTEST SUMMARY: {strategy_name} ===")
     print(f"Initial equity : {result['initial_equity']:.2f}")
@@ -111,6 +123,8 @@ def main() -> None:
             "batch-mt5",
             "validate-demo",
             "validate-mt5",
+            "portfolio-demo",
+            "portfolio-mt5",
             "cache-mt5",
             "list-strategies",
         ],
@@ -119,11 +133,16 @@ def main() -> None:
     )
     parser.add_argument("--bars", type=int, default=5000)
     parser.add_argument("--strategy", default=None, help="Override config strategy for a single backtest.")
-    parser.add_argument("--strategies", default="all", help="Comma-separated names or 'all' for batch/validation modes.")
+    parser.add_argument("--strategies", default="all", help="Comma-separated names or 'all' for batch/validation/portfolio modes.")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--save-data", action="store_true", help="Cache loaded bars under data_dir.")
     parser.add_argument("--output", default="results/strategy_leaderboard.csv")
     parser.add_argument("--validation-output", default="results/robust_validation.csv")
+    parser.add_argument("--portfolio-output-dir", default="results/portfolio")
+    parser.add_argument("--portfolio-verdicts", default="PASS,WATCH", help="Validation verdicts eligible for allocation.")
+    parser.add_argument("--portfolio-min-strategies", type=int, default=2)
+    parser.add_argument("--max-strategy-weight", type=float, default=0.35)
+    parser.add_argument("--portfolio-block-size", type=int, default=24)
     parser.add_argument("--mc-runs", type=int, default=1000)
     parser.add_argument("--wf-train-bars", type=int, default=2000)
     parser.add_argument("--wf-test-bars", type=int, default=500)
@@ -145,7 +164,7 @@ def main() -> None:
     cfg = load_config(config_path)
     store = MarketDataStore(cfg.data_dir)
 
-    demo_modes = {"demo-backtest", "batch-demo", "validate-demo"}
+    demo_modes = {"demo-backtest", "batch-demo", "validate-demo", "portfolio-demo"}
     if args.mode in demo_modes:
         raw = _synthetic_data(args.bars, seed=args.seed)
     else:
@@ -176,15 +195,7 @@ def main() -> None:
 
     if args.mode in {"validate-demo", "validate-mt5"}:
         names = _selected_strategy_names(args.strategies)
-        validation_cfg = ValidationConfig(
-            walk_forward_train_bars=args.wf_train_bars,
-            walk_forward_test_bars=args.wf_test_bars,
-            walk_forward_step_bars=args.wf_step_bars,
-            parameter_perturbation=args.param_perturbation,
-            monte_carlo_runs=args.mc_runs,
-            seed=args.seed,
-        )
-        results = validate_strategy_batch(raw, bt_cfg, names, validation_cfg)
+        results = validate_strategy_batch(raw, bt_cfg, names, _validation_config(args))
         target = Path(args.validation_output)
         target.parent.mkdir(parents=True, exist_ok=True)
         results.to_csv(target, index=False)
@@ -203,6 +214,38 @@ def main() -> None:
         print(display.to_string(index=False))
         print(f"\nSaved validation report -> {target}")
         print("PASS is a research gate only. It is not permission to deploy meaningful capital.")
+        return
+
+    if args.mode in {"portfolio-demo", "portfolio-mt5"}:
+        names = _selected_strategy_names(args.strategies)
+        verdicts = tuple(x.strip().upper() for x in args.portfolio_verdicts.split(",") if x.strip())
+        invalid_verdicts = sorted(set(verdicts).difference({"PASS", "WATCH", "REJECT"}))
+        if invalid_verdicts:
+            raise ValueError(f"invalid portfolio verdicts: {invalid_verdicts}")
+        portfolio_cfg = PortfolioConfig(
+            max_strategy_weight=args.max_strategy_weight,
+            min_strategies=args.portfolio_min_strategies,
+            allowed_verdicts=verdicts,
+            monte_carlo_runs=args.mc_runs,
+            monte_carlo_block_size=args.portfolio_block_size,
+            seed=args.seed,
+        )
+        report = research_portfolio(raw, bt_cfg, names, _validation_config(args), portfolio_cfg)
+        paths = save_portfolio_report(report, args.portfolio_output_dir)
+
+        summary = pd.DataFrame([report["summary"]])
+        display_weights = report["weights"].copy()
+        for col in ("weight", "risk_contribution", "oos_return_pct", "oos_max_drawdown_pct"):
+            if col in display_weights:
+                display_weights[col] = display_weights[col] * 100.0
+        print("\n=== PORTFOLIO OOS SUMMARY ===")
+        print(summary.to_string(index=False))
+        print("\n=== PORTFOLIO WEIGHTS ===")
+        print(display_weights.to_string(index=False))
+        print("\nSaved portfolio reports:")
+        for name, path in paths.items():
+            print(f"  {name:12s} -> {path}")
+        print("Weights are calibrated without using the untouched OOS segment, which is used only for portfolio evaluation.")
         return
 
     strategy_name = args.strategy or cfg.strategy.name
