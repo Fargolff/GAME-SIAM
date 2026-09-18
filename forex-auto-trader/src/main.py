@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+import time
 
 import numpy as np
 import pandas as pd
@@ -10,6 +11,7 @@ from .backtest import BacktestConfig, run_backtest
 from .config import load_config
 from .data import MarketDataStore, normalize_ohlc
 from .mt5_broker import MT5Broker
+from .paper import PaperConfig, PaperTradingEngine, load_portfolio_bundle
 from .portfolio import PortfolioConfig, research_portfolio, save_portfolio_report
 from .research import run_strategy_batch, save_research_results
 from .strategy import available_strategies, build_signals, strategy_spec
@@ -61,6 +63,20 @@ def _backtest_config(cfg) -> BacktestConfig:
     )
 
 
+def _paper_config(cfg, args) -> PaperConfig:
+    return PaperConfig(
+        initial_equity=cfg.initial_equity,
+        risk_per_trade=cfg.risk_per_trade,
+        max_daily_loss_pct=cfg.max_daily_loss_pct,
+        max_drawdown_pct=cfg.max_drawdown_pct,
+        spread_pips=cfg.spread_pips,
+        slippage_pips=cfg.slippage_pips,
+        commission_per_lot_round_turn=cfg.commission_per_lot_round_turn,
+        state_path=args.paper_state or cfg.paper.state_path,
+        events_path=args.paper_events or cfg.paper.events_path,
+    )
+
+
 def _mt5_data(cfg, bars: int) -> pd.DataFrame:
     broker = MT5Broker()
     broker.connect()
@@ -68,6 +84,14 @@ def _mt5_data(cfg, bars: int) -> pd.DataFrame:
         return normalize_ohlc(broker.rates(cfg.symbol, cfg.timeframe, bars=bars))
     finally:
         broker.close()
+
+
+def _mt5_completed_data(cfg, bars: int) -> pd.DataFrame:
+    raw = _mt5_data(cfg, bars)
+    if len(raw) < 2:
+        raise RuntimeError("MT5 returned too few bars to isolate the last completed bar")
+    # copy_rates_from_pos includes the currently-forming bar at position 0.
+    return raw.iloc[:-1].copy()
 
 
 def _selected_strategy_names(value: str) -> list[str]:
@@ -89,6 +113,39 @@ def _validation_config(args) -> ValidationConfig:
         monte_carlo_runs=args.mc_runs,
         seed=args.seed,
     )
+
+
+def _paper_demo_bundle(args) -> tuple[dict[str, dict], dict[str, float]]:
+    names = _selected_strategy_names(args.strategies)
+    strategies = {name: dict(strategy_spec(name).defaults) for name in names}
+    weights = {name: 1.0 / len(names) for name in names}
+    return strategies, weights
+
+
+def _paper_portfolio_bundle(cfg, args) -> tuple[dict[str, dict], dict[str, float]]:
+    weights_path = args.paper_weights or cfg.paper.weights_path
+    candidates_path = args.paper_candidates or cfg.paper.candidates_path
+    return load_portfolio_bundle(weights_path, candidates_path)
+
+
+def _print_paper_snapshot(snapshot: dict) -> None:
+    print("\n=== PAPER TRADING SNAPSHOT ===")
+    print(f"Symbol          : {snapshot['symbol']}")
+    print(f"Balance         : {snapshot['balance']:.2f}")
+    print(f"Equity          : {snapshot['equity']:.2f}")
+    print(f"Peak equity     : {snapshot['peak_equity']:.2f}")
+    print(f"Open positions  : {snapshot['open_positions']}")
+    print(f"Pending signals : {snapshot['pending_signals']}")
+    print(f"Last bar        : {snapshot['last_bar_time']}")
+    print(f"Halted          : {snapshot['halted']}")
+    if snapshot["halt_reason"]:
+        print(f"Halt reason     : {snapshot['halt_reason']}")
+
+
+def _run_paper_mt5_once(cfg, args, engine: PaperTradingEngine) -> dict:
+    history_bars = args.paper_history_bars or cfg.paper.history_bars
+    completed = _mt5_completed_data(cfg, history_bars)
+    return engine.process(completed)
 
 
 def print_report(result: dict, strategy_name: str) -> None:
@@ -125,15 +182,18 @@ def main() -> None:
             "validate-mt5",
             "portfolio-demo",
             "portfolio-mt5",
+            "paper-demo",
+            "paper-mt5-once",
+            "paper-mt5-daemon",
             "cache-mt5",
             "list-strategies",
         ],
         default="demo-backtest",
-        help="Live order execution remains intentionally unavailable from this CLI.",
+        help="Real order execution remains intentionally unavailable from this CLI.",
     )
     parser.add_argument("--bars", type=int, default=5000)
     parser.add_argument("--strategy", default=None, help="Override config strategy for a single backtest.")
-    parser.add_argument("--strategies", default="all", help="Comma-separated names or 'all' for batch/validation/portfolio modes.")
+    parser.add_argument("--strategies", default="all", help="Comma-separated names or 'all' for batch/validation/portfolio/demo-paper modes.")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--save-data", action="store_true", help="Cache loaded bars under data_dir.")
     parser.add_argument("--output", default="results/strategy_leaderboard.csv")
@@ -148,6 +208,13 @@ def main() -> None:
     parser.add_argument("--wf-test-bars", type=int, default=500)
     parser.add_argument("--wf-step-bars", type=int, default=500)
     parser.add_argument("--param-perturbation", type=float, default=0.20)
+    parser.add_argument("--paper-state", default=None, help="Override persistent paper-state JSON path.")
+    parser.add_argument("--paper-events", default=None, help="Override paper event-log CSV path.")
+    parser.add_argument("--paper-weights", default=None, help="Override Phase-5 portfolio weights CSV path.")
+    parser.add_argument("--paper-candidates", default=None, help="Override Phase-5 portfolio candidates CSV path.")
+    parser.add_argument("--paper-poll-seconds", type=int, default=None, help="MT5 daemon polling interval.")
+    parser.add_argument("--paper-history-bars", type=int, default=None, help="Bars fetched each paper polling cycle.")
+    parser.add_argument("--paper-max-cycles", type=int, default=0, help="Daemon cycles; 0 means run until Ctrl+C.")
     args = parser.parse_args()
 
     if args.mode == "list-strategies":
@@ -163,6 +230,49 @@ def main() -> None:
 
     cfg = load_config(config_path)
     store = MarketDataStore(cfg.data_dir)
+
+    if args.mode == "paper-demo":
+        strategies, weights = _paper_demo_bundle(args)
+        engine = PaperTradingEngine(cfg.symbol, strategies, weights, _paper_config(cfg, args))
+        snapshot = engine.process(_synthetic_data(args.bars, seed=args.seed))
+        _print_paper_snapshot(snapshot)
+        print(f"Paper state -> {engine.config.state_path}")
+        print(f"Paper events -> {engine.config.events_path}")
+        print("Synthetic paper mode never sends broker orders.")
+        return
+
+    if args.mode in {"paper-mt5-once", "paper-mt5-daemon"}:
+        strategies, weights = _paper_portfolio_bundle(cfg, args)
+        engine = PaperTradingEngine(cfg.symbol, strategies, weights, _paper_config(cfg, args))
+        if args.mode == "paper-mt5-once":
+            snapshot = _run_paper_mt5_once(cfg, args, engine)
+            _print_paper_snapshot(snapshot)
+            print(f"Paper state -> {engine.config.state_path}")
+            print(f"Paper events -> {engine.config.events_path}")
+            print("MT5 was used for market data only; no order_send call is made by paper mode.")
+            return
+
+        poll_seconds = args.paper_poll_seconds or cfg.paper.poll_seconds
+        if poll_seconds < 1:
+            raise ValueError("paper polling interval must be >= 1 second")
+        if args.paper_max_cycles < 0:
+            raise ValueError("paper-max-cycles must be >= 0")
+        print("Starting MT5 paper daemon. No real order execution is available in this mode.")
+        cycles = 0
+        try:
+            while args.paper_max_cycles == 0 or cycles < args.paper_max_cycles:
+                snapshot = _run_paper_mt5_once(cfg, args, engine)
+                cycles += 1
+                _print_paper_snapshot(snapshot)
+                if snapshot["halted"]:
+                    print("Paper portfolio is halted by the risk gate; daemon stopped.")
+                    break
+                if args.paper_max_cycles and cycles >= args.paper_max_cycles:
+                    break
+                time.sleep(poll_seconds)
+        except KeyboardInterrupt:
+            print("Paper daemon stopped by user.")
+        return
 
     demo_modes = {"demo-backtest", "batch-demo", "validate-demo", "portfolio-demo"}
     if args.mode in demo_modes:
