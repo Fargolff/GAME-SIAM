@@ -25,8 +25,16 @@ class LiveConfig:
     max_total_lots: float = 0.05
     max_open_positions: int = 3
     max_spread_pips: float = 2.0
+    max_tick_age_seconds: float = 30.0
+    # 0 = derive automatically from the configured timeframe in the CLI.
+    max_bar_age_seconds: float = 0.0
+    deal_reconcile_lookback_hours: float = 72.0
+    max_reconnect_attempts: int = 3
+    reconnect_backoff_seconds: float = 5.0
     state_path: str = "runtime/live_state.json"
     events_path: str = "runtime/live_events.csv"
+    heartbeat_path: str = "runtime/live_heartbeat.json"
+    incidents_path: str = "runtime/live_incidents.csv"
     weights_path: str = "results/portfolio/portfolio_weights.csv"
     candidates_path: str = "results/portfolio/portfolio_candidates.csv"
     poll_seconds: int = 30
@@ -103,6 +111,16 @@ def _live(data: dict[str, Any]) -> LiveConfig:
         raise ValueError("live.max_open_positions must be >= 1")
     if cfg.max_spread_pips <= 0:
         raise ValueError("live.max_spread_pips must be positive")
+    if cfg.max_tick_age_seconds <= 0:
+        raise ValueError("live.max_tick_age_seconds must be positive")
+    if cfg.max_bar_age_seconds < 0:
+        raise ValueError("live.max_bar_age_seconds cannot be negative")
+    if cfg.deal_reconcile_lookback_hours <= 0:
+        raise ValueError("live.deal_reconcile_lookback_hours must be positive")
+    if cfg.max_reconnect_attempts < 0:
+        raise ValueError("live.max_reconnect_attempts cannot be negative")
+    if cfg.reconnect_backoff_seconds < 0:
+        raise ValueError("live.reconnect_backoff_seconds cannot be negative")
     return cfg
 
 
