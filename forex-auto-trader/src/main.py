@@ -13,6 +13,7 @@ from .config import load_config
 from .data import MarketDataStore, normalize_ohlc
 from .live import ARM_PHRASE, LiveEngineConfig, LiveEventLog, LiveTradingEngine, preflight_report, require_live_arming
 from .mt5_broker import MT5Broker
+from .ops import operational_report
 from .paper import PaperConfig, PaperTradingEngine, load_portfolio_bundle
 from .portfolio import PortfolioConfig, research_portfolio, save_portfolio_report
 from .research import run_strategy_batch, save_research_results
@@ -52,6 +53,19 @@ def _periods_per_year(timeframe: str) -> float:
     return mapping.get(timeframe.upper(), 252.0 * 24.0)
 
 
+def _timeframe_seconds(timeframe: str) -> float:
+    mapping = {
+        "M1": 60.0,
+        "M5": 5.0 * 60.0,
+        "M15": 15.0 * 60.0,
+        "M30": 30.0 * 60.0,
+        "H1": 60.0 * 60.0,
+        "H4": 4.0 * 60.0 * 60.0,
+        "D1": 24.0 * 60.0 * 60.0,
+    }
+    return mapping.get(timeframe.upper(), 60.0 * 60.0)
+
+
 def _backtest_config(cfg) -> BacktestConfig:
     return BacktestConfig(
         initial_equity=cfg.initial_equity,
@@ -80,6 +94,7 @@ def _paper_config(cfg, args) -> PaperConfig:
 
 
 def _live_config(cfg, args) -> LiveEngineConfig:
+    max_bar_age = cfg.live.max_bar_age_seconds or (_timeframe_seconds(cfg.timeframe) * 2.5)
     return LiveEngineConfig(
         risk_per_trade=cfg.live.risk_per_trade,
         max_daily_loss_pct=cfg.live.max_daily_loss_pct,
@@ -88,10 +103,15 @@ def _live_config(cfg, args) -> LiveEngineConfig:
         max_total_lots=cfg.live.max_total_lots,
         max_open_positions=cfg.live.max_open_positions,
         max_spread_pips=cfg.live.max_spread_pips,
+        max_tick_age_seconds=cfg.live.max_tick_age_seconds,
+        max_bar_age_seconds=max_bar_age,
+        deal_reconcile_lookback_hours=cfg.live.deal_reconcile_lookback_hours,
         magic=cfg.live.magic,
         deviation_points=cfg.live.deviation_points,
         state_path=args.live_state or cfg.live.state_path,
         events_path=args.live_events or cfg.live.events_path,
+        heartbeat_path=args.live_heartbeat or cfg.live.heartbeat_path,
+        incidents_path=args.live_incidents or cfg.live.incidents_path,
     )
 
 
@@ -185,9 +205,30 @@ def _print_live_snapshot(snapshot: dict) -> None:
     print(f"Managed positions  : {snapshot['managed_positions']}")
     print(f"Managed total lots : {snapshot['managed_total_lots']:.4f}")
     print(f"Last bar           : {snapshot['last_bar_time']}")
+    print(f"Last deal msec     : {snapshot['last_deal_time_msc']}")
     print(f"Halted             : {snapshot['halted']}")
     if snapshot["halt_reason"]:
         print(f"Halt reason        : {snapshot['halt_reason']}")
+    print(f"Heartbeat          : {snapshot['heartbeat_path']}")
+    print(f"Incidents          : {snapshot['incidents_path']}")
+
+
+def _print_operational_report(report: dict) -> None:
+    print("\n=== LIVE OPERATIONAL HEALTH ===")
+    print(f"Status                 : {report['status']}")
+    print(f"Terminal connected     : {report['terminal'].connected}")
+    print(f"Terminal trade allowed : {report['terminal'].trade_allowed}")
+    print(f"Spread                 : {report['spread_pips']:.2f} pips")
+    print(f"Tick age               : {report['tick_age_seconds']:.1f}s")
+    print(f"Completed-bar age      : {report['bar_age_seconds']:.1f}s")
+    print(f"Managed positions      : {len(report['positions'])}")
+    print(f"Account equity         : {report['account'].equity:.2f} {report['account'].currency}")
+    if report["incidents"]:
+        print("Incidents:")
+        for item in report["incidents"]:
+            print(f"  [{item.severity}] {item.code}: {item.detail}")
+    else:
+        print("Incidents              : none")
 
 
 def _run_paper_mt5_once(cfg, args, engine: PaperTradingEngine) -> dict:
@@ -200,6 +241,39 @@ def _run_live_once(cfg, args, broker: MT5Broker, engine: LiveTradingEngine) -> d
     history_bars = args.live_history_bars or cfg.live.history_bars
     completed = _completed_from_broker(broker, cfg, history_bars)
     return engine.process_latest(completed)
+
+
+def _log_runtime_event(event_log: LiveEventLog, event: str, reason: str) -> None:
+    event_log.append(
+        time=datetime.now(timezone.utc).isoformat(),
+        event=event,
+        strategy="PORTFOLIO",
+        side="",
+        lots="",
+        price="",
+        stop_loss="",
+        take_profit="",
+        spread_pips="",
+        ticket="",
+        reason=reason,
+    )
+
+
+def _reconnect_broker(broker: MT5Broker, cfg, event_log: LiveEventLog) -> bool:
+    attempts = cfg.live.max_reconnect_attempts
+    for attempt in range(1, attempts + 1):
+        if cfg.live.reconnect_backoff_seconds > 0:
+            time.sleep(cfg.live.reconnect_backoff_seconds)
+        try:
+            broker.reconnect()
+            terminal = broker.terminal_snapshot()
+            if not terminal.connected:
+                raise RuntimeError("terminal still reports connected=false after reconnect")
+            _log_runtime_event(event_log, "RECONNECT", f"attempt={attempt};status=success")
+            return True
+        except Exception as exc:
+            _log_runtime_event(event_log, "RECONNECT", f"attempt={attempt};status=failed;error={exc}")
+    return False
 
 
 def print_report(result: dict, strategy_name: str) -> None:
@@ -240,6 +314,7 @@ def main() -> None:
             "paper-mt5-once",
             "paper-mt5-daemon",
             "live-preflight",
+            "live-health",
             "live-mt5-once",
             "live-mt5-daemon",
             "live-flatten",
@@ -247,7 +322,7 @@ def main() -> None:
             "list-strategies",
         ],
         default="demo-backtest",
-        help="Real orders are available only through explicitly armed Phase-7 live modes.",
+        help="Real orders are available only through explicitly armed guarded-live modes.",
     )
     parser.add_argument("--bars", type=int, default=5000)
     parser.add_argument("--strategy", default=None, help="Override config strategy for a single backtest.")
@@ -275,6 +350,8 @@ def main() -> None:
     parser.add_argument("--paper-max-cycles", type=int, default=0, help="Daemon cycles; 0 means run until Ctrl+C.")
     parser.add_argument("--live-state", default=None, help="Override persistent live-state JSON path.")
     parser.add_argument("--live-events", default=None, help="Override live event-log CSV path.")
+    parser.add_argument("--live-heartbeat", default=None, help="Override live heartbeat JSON path.")
+    parser.add_argument("--live-incidents", default=None, help="Override live incident-log CSV path.")
     parser.add_argument("--live-weights", default=None, help="Override Phase-5 portfolio weights CSV path for live mode.")
     parser.add_argument("--live-candidates", default=None, help="Override Phase-5 portfolio candidates CSV path for live mode.")
     parser.add_argument("--live-poll-seconds", type=int, default=None, help="Guarded live daemon polling interval.")
@@ -297,22 +374,38 @@ def main() -> None:
     cfg = load_config(config_path)
     store = MarketDataStore(cfg.data_dir)
 
-    if args.mode == "live-preflight":
-        # Preflight is read-only and intentionally does not require the arming phrase.
-        _live_portfolio_bundle(cfg, args)
+    if args.mode in {"live-preflight", "live-health"}:
+        strategies, _ = _live_portfolio_bundle(cfg, args)
         broker = MT5Broker()
         broker.connect()
         try:
-            report = preflight_report(broker, cfg.symbol, _live_config(cfg, args), cfg.live.enabled)
-            print("\n=== LIVE PREFLIGHT ===")
-            for name, passed in report["checks"].items():
-                print(f"{name:30s}: {'PASS' if passed else 'FAIL'}")
-            print(f"Spread                 : {report['spread_pips']:.2f} pips")
-            print(f"Managed positions       : {len(report['managed_positions'])}")
-            print(f"Managed total lots      : {report['managed_total_lots']:.4f}")
-            print(f"Account equity          : {report['account'].equity:.2f} {report['account'].currency}")
-            print(f"Hedging account         : {report['account'].hedging}")
-            print(f"Overall                 : {'PASS' if report['ok'] else 'FAIL'}")
+            live_cfg = _live_config(cfg, args)
+            if args.mode == "live-preflight":
+                report = preflight_report(broker, cfg.symbol, live_cfg, cfg.live.enabled)
+                print("\n=== LIVE PREFLIGHT ===")
+                for name, passed in report["checks"].items():
+                    print(f"{name:30s}: {'PASS' if passed else 'FAIL'}")
+                print(f"Spread                 : {report['spread_pips']:.2f} pips")
+                print(f"Managed positions       : {len(report['managed_positions'])}")
+                print(f"Managed total lots      : {report['managed_total_lots']:.4f}")
+                print(f"Account equity          : {report['account'].equity:.2f} {report['account'].currency}")
+                print(f"Hedging account         : {report['account'].hedging}")
+                print(f"Terminal connected      : {report['terminal'].connected}")
+                print(f"Overall                 : {'PASS' if report['ok'] else 'FAIL'}")
+                return
+
+            history_bars = args.live_history_bars or cfg.live.history_bars
+            completed = _completed_from_broker(broker, cfg, history_bars)
+            report = operational_report(
+                broker,
+                cfg.symbol,
+                live_cfg.magic,
+                set(strategies),
+                completed.index[-1],
+                max_tick_age_seconds=live_cfg.max_tick_age_seconds,
+                max_bar_age_seconds=live_cfg.max_bar_age_seconds,
+            )
+            _print_operational_report(report)
         finally:
             broker.close()
         return
@@ -375,13 +468,25 @@ def main() -> None:
                 raise ValueError("live-max-cycles must be >= 0")
             print("Starting GUARDED MT5 live daemon. Real orders can be sent under configured caps.")
             cycles = 0
+            event_log = LiveEventLog(live_cfg.events_path)
             try:
                 while args.live_max_cycles == 0 or cycles < args.live_max_cycles:
-                    snapshot = _run_live_once(cfg, args, broker, engine)
                     cycles += 1
+                    try:
+                        snapshot = _run_live_once(cfg, args, broker, engine)
+                    except Exception as exc:
+                        _log_runtime_event(event_log, "RUNTIME_ERROR", f"cycle={cycles};error={exc}")
+                        print(f"Live cycle error: {exc}")
+                        if not _reconnect_broker(broker, cfg, event_log):
+                            raise RuntimeError("MT5 reconnect attempts exhausted; live daemon stopped") from exc
+                        print("MT5 connection recovered; next cycle will re-read broker state before trading.")
+                        if args.live_max_cycles and cycles >= args.live_max_cycles:
+                            break
+                        continue
+
                     _print_live_snapshot(snapshot)
                     if snapshot["halted"]:
-                        print("Live portfolio is halted by the risk gate; daemon stopped.")
+                        print("Live portfolio is halted; daemon stopped for operator review.")
                         break
                     if args.live_max_cycles and cycles >= args.live_max_cycles:
                         break
