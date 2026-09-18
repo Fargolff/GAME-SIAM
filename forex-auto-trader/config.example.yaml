@@ -32,7 +32,23 @@ paper:
   poll_seconds: 30
   history_bars: 5000
 
+# Phase 7 live execution is intentionally disabled by default.
+# Enabling this flag is still not enough to trade: the CLI also requires the
+# explicit operator arming phrase. Phase 7 supports MT5 hedging accounts only.
 live:
   enabled: false
   magic: 56001
   deviation_points: 20
+  risk_per_trade: 0.0025
+  max_daily_loss_pct: 0.01
+  max_drawdown_pct: 0.05
+  max_lot_per_order: 0.02
+  max_total_lots: 0.05
+  max_open_positions: 3
+  max_spread_pips: 2.0
+  state_path: runtime/live_state.json
+  events_path: runtime/live_events.csv
+  weights_path: results/portfolio/portfolio_weights.csv
+  candidates_path: results/portfolio/portfolio_candidates.csv
+  poll_seconds: 30
+  history_bars: 5000
