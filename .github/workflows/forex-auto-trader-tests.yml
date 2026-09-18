@@ -40,3 +40,8 @@ jobs:
         env:
           PYTHONPATH: .
         run: python -m pytest -q
+
+      - name: Run operational soak
+        env:
+          PYTHONPATH: .
+        run: python -m src.soak --cycles 300
