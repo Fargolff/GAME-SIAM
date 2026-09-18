@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 from pathlib import Path
 import time
 
@@ -10,6 +11,7 @@ import pandas as pd
 from .backtest import BacktestConfig, run_backtest
 from .config import load_config
 from .data import MarketDataStore, normalize_ohlc
+from .live import ARM_PHRASE, LiveEngineConfig, LiveEventLog, LiveTradingEngine, preflight_report, require_live_arming
 from .mt5_broker import MT5Broker
 from .paper import PaperConfig, PaperTradingEngine, load_portfolio_bundle
 from .portfolio import PortfolioConfig, research_portfolio, save_portfolio_report
@@ -77,6 +79,22 @@ def _paper_config(cfg, args) -> PaperConfig:
     )
 
 
+def _live_config(cfg, args) -> LiveEngineConfig:
+    return LiveEngineConfig(
+        risk_per_trade=cfg.live.risk_per_trade,
+        max_daily_loss_pct=cfg.live.max_daily_loss_pct,
+        max_drawdown_pct=cfg.live.max_drawdown_pct,
+        max_lot_per_order=cfg.live.max_lot_per_order,
+        max_total_lots=cfg.live.max_total_lots,
+        max_open_positions=cfg.live.max_open_positions,
+        max_spread_pips=cfg.live.max_spread_pips,
+        magic=cfg.live.magic,
+        deviation_points=cfg.live.deviation_points,
+        state_path=args.live_state or cfg.live.state_path,
+        events_path=args.live_events or cfg.live.events_path,
+    )
+
+
 def _mt5_data(cfg, bars: int) -> pd.DataFrame:
     broker = MT5Broker()
     broker.connect()
@@ -86,12 +104,21 @@ def _mt5_data(cfg, bars: int) -> pd.DataFrame:
         broker.close()
 
 
-def _mt5_completed_data(cfg, bars: int) -> pd.DataFrame:
-    raw = _mt5_data(cfg, bars)
+def _completed_from_broker(broker: MT5Broker, cfg, bars: int) -> pd.DataFrame:
+    raw = normalize_ohlc(broker.rates(cfg.symbol, cfg.timeframe, bars=bars))
     if len(raw) < 2:
         raise RuntimeError("MT5 returned too few bars to isolate the last completed bar")
     # copy_rates_from_pos includes the currently-forming bar at position 0.
     return raw.iloc[:-1].copy()
+
+
+def _mt5_completed_data(cfg, bars: int) -> pd.DataFrame:
+    broker = MT5Broker()
+    broker.connect()
+    try:
+        return _completed_from_broker(broker, cfg, bars)
+    finally:
+        broker.close()
 
 
 def _selected_strategy_names(value: str) -> list[str]:
@@ -128,6 +155,12 @@ def _paper_portfolio_bundle(cfg, args) -> tuple[dict[str, dict], dict[str, float
     return load_portfolio_bundle(weights_path, candidates_path)
 
 
+def _live_portfolio_bundle(cfg, args) -> tuple[dict[str, dict], dict[str, float]]:
+    weights_path = args.live_weights or cfg.live.weights_path
+    candidates_path = args.live_candidates or cfg.live.candidates_path
+    return load_portfolio_bundle(weights_path, candidates_path)
+
+
 def _print_paper_snapshot(snapshot: dict) -> None:
     print("\n=== PAPER TRADING SNAPSHOT ===")
     print(f"Symbol          : {snapshot['symbol']}")
@@ -142,10 +175,31 @@ def _print_paper_snapshot(snapshot: dict) -> None:
         print(f"Halt reason     : {snapshot['halt_reason']}")
 
 
+def _print_live_snapshot(snapshot: dict) -> None:
+    print("\n=== GUARDED LIVE SNAPSHOT ===")
+    print(f"Symbol             : {snapshot['symbol']}")
+    print(f"Balance            : {snapshot['balance']:.2f}")
+    print(f"Equity             : {snapshot['equity']:.2f}")
+    print(f"Free margin        : {snapshot['free_margin']:.2f}")
+    print(f"Peak equity        : {snapshot['peak_equity']:.2f}")
+    print(f"Managed positions  : {snapshot['managed_positions']}")
+    print(f"Managed total lots : {snapshot['managed_total_lots']:.4f}")
+    print(f"Last bar           : {snapshot['last_bar_time']}")
+    print(f"Halted             : {snapshot['halted']}")
+    if snapshot["halt_reason"]:
+        print(f"Halt reason        : {snapshot['halt_reason']}")
+
+
 def _run_paper_mt5_once(cfg, args, engine: PaperTradingEngine) -> dict:
     history_bars = args.paper_history_bars or cfg.paper.history_bars
     completed = _mt5_completed_data(cfg, history_bars)
     return engine.process(completed)
+
+
+def _run_live_once(cfg, args, broker: MT5Broker, engine: LiveTradingEngine) -> dict:
+    history_bars = args.live_history_bars or cfg.live.history_bars
+    completed = _completed_from_broker(broker, cfg, history_bars)
+    return engine.process_latest(completed)
 
 
 def print_report(result: dict, strategy_name: str) -> None:
@@ -185,11 +239,15 @@ def main() -> None:
             "paper-demo",
             "paper-mt5-once",
             "paper-mt5-daemon",
+            "live-preflight",
+            "live-mt5-once",
+            "live-mt5-daemon",
+            "live-flatten",
             "cache-mt5",
             "list-strategies",
         ],
         default="demo-backtest",
-        help="Real order execution remains intentionally unavailable from this CLI.",
+        help="Real orders are available only through explicitly armed Phase-7 live modes.",
     )
     parser.add_argument("--bars", type=int, default=5000)
     parser.add_argument("--strategy", default=None, help="Override config strategy for a single backtest.")
@@ -215,6 +273,14 @@ def main() -> None:
     parser.add_argument("--paper-poll-seconds", type=int, default=None, help="MT5 daemon polling interval.")
     parser.add_argument("--paper-history-bars", type=int, default=None, help="Bars fetched each paper polling cycle.")
     parser.add_argument("--paper-max-cycles", type=int, default=0, help="Daemon cycles; 0 means run until Ctrl+C.")
+    parser.add_argument("--live-state", default=None, help="Override persistent live-state JSON path.")
+    parser.add_argument("--live-events", default=None, help="Override live event-log CSV path.")
+    parser.add_argument("--live-weights", default=None, help="Override Phase-5 portfolio weights CSV path for live mode.")
+    parser.add_argument("--live-candidates", default=None, help="Override Phase-5 portfolio candidates CSV path for live mode.")
+    parser.add_argument("--live-poll-seconds", type=int, default=None, help="Guarded live daemon polling interval.")
+    parser.add_argument("--live-history-bars", type=int, default=None, help="Bars fetched each guarded live cycle.")
+    parser.add_argument("--live-max-cycles", type=int, default=0, help="Live daemon cycles; 0 means run until Ctrl+C.")
+    parser.add_argument("--arm-live", default=None, help=f"Required for real-order modes; exact value: {ARM_PHRASE}")
     args = parser.parse_args()
 
     if args.mode == "list-strategies":
@@ -230,6 +296,101 @@ def main() -> None:
 
     cfg = load_config(config_path)
     store = MarketDataStore(cfg.data_dir)
+
+    if args.mode == "live-preflight":
+        # Preflight is read-only and intentionally does not require the arming phrase.
+        _live_portfolio_bundle(cfg, args)
+        broker = MT5Broker()
+        broker.connect()
+        try:
+            report = preflight_report(broker, cfg.symbol, _live_config(cfg, args), cfg.live.enabled)
+            print("\n=== LIVE PREFLIGHT ===")
+            for name, passed in report["checks"].items():
+                print(f"{name:30s}: {'PASS' if passed else 'FAIL'}")
+            print(f"Spread                 : {report['spread_pips']:.2f} pips")
+            print(f"Managed positions       : {len(report['managed_positions'])}")
+            print(f"Managed total lots      : {report['managed_total_lots']:.4f}")
+            print(f"Account equity          : {report['account'].equity:.2f} {report['account'].currency}")
+            print(f"Hedging account         : {report['account'].hedging}")
+            print(f"Overall                 : {'PASS' if report['ok'] else 'FAIL'}")
+        finally:
+            broker.close()
+        return
+
+    if args.mode in {"live-mt5-once", "live-mt5-daemon", "live-flatten"}:
+        broker = MT5Broker()
+        broker.connect()
+        try:
+            live_cfg = _live_config(cfg, args)
+            require_live_arming(cfg.live.enabled, args.arm_live)
+
+            if args.mode == "live-flatten":
+                event_log = LiveEventLog(live_cfg.events_path)
+                positions = broker.open_positions(symbol=cfg.symbol, magic=live_cfg.magic)
+                closed = 0
+                for position in positions:
+                    broker.close_position(
+                        position,
+                        deviation_points=live_cfg.deviation_points,
+                        live_enabled=cfg.live.enabled,
+                    )
+                    closed += 1
+                    event_log.append(
+                        time=datetime.now(timezone.utc).isoformat(),
+                        event="FLATTEN",
+                        strategy="",
+                        side=position.side,
+                        lots=position.volume,
+                        price="",
+                        stop_loss=position.stop_loss,
+                        take_profit=position.take_profit,
+                        spread_pips="",
+                        ticket=position.ticket,
+                        reason="operator_flatten",
+                    )
+                print(f"Emergency flatten completed for {closed} managed position(s).")
+                return
+
+            strategies, weights = _live_portfolio_bundle(cfg, args)
+            engine = LiveTradingEngine(
+                broker,
+                cfg.symbol,
+                strategies,
+                weights,
+                live_cfg,
+                cfg.live.enabled,
+                args.arm_live,
+            )
+            if args.mode == "live-mt5-once":
+                snapshot = _run_live_once(cfg, args, broker, engine)
+                _print_live_snapshot(snapshot)
+                print(f"Live state -> {engine.config.state_path}")
+                print(f"Live events -> {engine.config.events_path}")
+                return
+
+            poll_seconds = args.live_poll_seconds or cfg.live.poll_seconds
+            if poll_seconds < 1:
+                raise ValueError("live polling interval must be >= 1 second")
+            if args.live_max_cycles < 0:
+                raise ValueError("live-max-cycles must be >= 0")
+            print("Starting GUARDED MT5 live daemon. Real orders can be sent under configured caps.")
+            cycles = 0
+            try:
+                while args.live_max_cycles == 0 or cycles < args.live_max_cycles:
+                    snapshot = _run_live_once(cfg, args, broker, engine)
+                    cycles += 1
+                    _print_live_snapshot(snapshot)
+                    if snapshot["halted"]:
+                        print("Live portfolio is halted by the risk gate; daemon stopped.")
+                        break
+                    if args.live_max_cycles and cycles >= args.live_max_cycles:
+                        break
+                    time.sleep(poll_seconds)
+            except KeyboardInterrupt:
+                print("Live daemon stopped by operator. Existing broker positions are NOT automatically flattened.")
+            return
+        finally:
+            broker.close()
 
     if args.mode == "paper-demo":
         strategies, weights = _paper_demo_bundle(args)
