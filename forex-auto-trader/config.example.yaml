@@ -32,9 +32,9 @@ paper:
   poll_seconds: 30
   history_bars: 5000
 
-# Phase 7 live execution is intentionally disabled by default.
+# Phase 7/8 live execution is intentionally disabled by default.
 # Enabling this flag is still not enough to trade: the CLI also requires the
-# explicit operator arming phrase. Phase 7 supports MT5 hedging accounts only.
+# explicit operator arming phrase. Live mode supports MT5 hedging accounts only.
 live:
   enabled: false
   magic: 56001
@@ -46,8 +46,19 @@ live:
   max_total_lots: 0.05
   max_open_positions: 3
   max_spread_pips: 2.0
+
+  # Phase 8 production-health gates.
+  max_tick_age_seconds: 30
+  # 0 = auto derive as 2.5 x configured timeframe duration.
+  max_bar_age_seconds: 0
+  deal_reconcile_lookback_hours: 72
+  max_reconnect_attempts: 3
+  reconnect_backoff_seconds: 5
+
   state_path: runtime/live_state.json
   events_path: runtime/live_events.csv
+  heartbeat_path: runtime/live_heartbeat.json
+  incidents_path: runtime/live_incidents.csv
   weights_path: results/portfolio/portfolio_weights.csv
   candidates_path: results/portfolio/portfolio_candidates.csv
   poll_seconds: 30
