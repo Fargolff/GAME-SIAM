@@ -1,0 +1,40 @@
+name: Forex Auto Trader Tests
+
+on:
+  pull_request:
+    paths:
+      - "forex-auto-trader/**"
+      - ".github/workflows/forex-auto-trader-tests.yml"
+  push:
+    branches:
+      - main
+      - codex/forex-auto-trader-mvp
+    paths:
+      - "forex-auto-trader/**"
+      - ".github/workflows/forex-auto-trader-tests.yml"
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: forex-auto-trader
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: forex-auto-trader/requirements.txt
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "pandas>=2.2" "numpy>=2.0" "PyYAML>=6.0" "pytest>=8.0"
+
+      - name: Run tests
+        run: pytest -q
