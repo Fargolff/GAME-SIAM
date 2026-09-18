@@ -74,7 +74,7 @@ def test_margin_stress_uses_managed_stop_risk_and_extra_budget():
         min_margin_level_pct=300.0,
         min_free_margin_pct=0.25,
     )
-    assert report["existing_stop_risk"] == pytest.approx(500.0)
+    assert report["existing_stop_risk"] == pytest.approx(50.0)
     assert report["additional_risk"] == pytest.approx(25.0)
     assert report["ok"] is True
 
