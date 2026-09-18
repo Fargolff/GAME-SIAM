@@ -21,6 +21,16 @@ class LiveConfig:
 
 
 @dataclass(frozen=True)
+class PaperRuntimeConfig:
+    state_path: str = "runtime/paper_state.json"
+    events_path: str = "runtime/paper_events.csv"
+    weights_path: str = "results/portfolio/portfolio_weights.csv"
+    candidates_path: str = "results/portfolio/portfolio_candidates.csv"
+    poll_seconds: int = 30
+    history_bars: int = 5000
+
+
+@dataclass(frozen=True)
 class AppConfig:
     mode: str = "backtest"
     symbol: str = "EURUSD"
@@ -34,6 +44,7 @@ class AppConfig:
     slippage_pips: float = 0.2
     commission_per_lot_round_turn: float = 7.0
     strategy: StrategyConfig = field(default_factory=StrategyConfig)
+    paper: PaperRuntimeConfig = field(default_factory=PaperRuntimeConfig)
     live: LiveConfig = field(default_factory=LiveConfig)
 
 
@@ -50,6 +61,15 @@ def _strategy(data: dict[str, Any]) -> StrategyConfig:
     return StrategyConfig(name=name, params=params)
 
 
+def _paper(data: dict[str, Any]) -> PaperRuntimeConfig:
+    cfg = PaperRuntimeConfig(**(data or {}))
+    if cfg.poll_seconds < 1:
+        raise ValueError("paper.poll_seconds must be >= 1")
+    if cfg.history_bars < 100:
+        raise ValueError("paper.history_bars must be >= 100")
+    return cfg
+
+
 def _live(data: dict[str, Any]) -> LiveConfig:
     return LiveConfig(**(data or {}))
 
@@ -60,5 +80,6 @@ def load_config(path: str | Path = "config.yaml") -> AppConfig:
         raise ValueError("top-level YAML config must be a mapping")
     raw = dict(raw)
     strategy = _strategy(raw.pop("strategy", {}))
+    paper = _paper(raw.pop("paper", {}))
     live = _live(raw.pop("live", {}))
-    return AppConfig(strategy=strategy, live=live, **raw)
+    return AppConfig(strategy=strategy, paper=paper, live=live, **raw)
