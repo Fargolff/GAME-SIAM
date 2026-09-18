@@ -73,6 +73,13 @@ class BrokerTick:
 
 
 @dataclass(frozen=True)
+class TerminalSnapshot:
+    connected: bool
+    trade_allowed: bool
+    dlls_allowed: bool
+
+
+@dataclass(frozen=True)
 class AccountSnapshot:
     balance: float
     equity: float
@@ -98,6 +105,24 @@ class BrokerPosition:
     comment: str
 
 
+@dataclass(frozen=True)
+class BrokerDeal:
+    ticket: int
+    order: int
+    position_id: int
+    time_msc: int
+    symbol: str
+    side: int
+    volume: float
+    price: float
+    profit: float
+    commission: float
+    swap: float
+    magic: int
+    comment: str
+    entry: int
+
+
 class MT5Broker:
     def __init__(self) -> None:
         if mt5 is None:
@@ -109,10 +134,24 @@ class MT5Broker:
             raise RuntimeError(f"MT5 initialize failed: {mt5.last_error()}")
         self.connected = True
 
+    def reconnect(self) -> None:
+        self.close()
+        self.connect()
+
     def close(self) -> None:
         if self.connected:
             mt5.shutdown()
             self.connected = False
+
+    def terminal_snapshot(self) -> TerminalSnapshot:
+        info = mt5.terminal_info()
+        if info is None:
+            raise RuntimeError(f"MT5 terminal_info failed: {mt5.last_error()}")
+        return TerminalSnapshot(
+            connected=bool(getattr(info, "connected", False)),
+            trade_allowed=bool(getattr(info, "trade_allowed", False)),
+            dlls_allowed=bool(getattr(info, "dlls_allowed", False)),
+        )
 
     def rates(self, symbol: str, timeframe: str, bars: int = 2000) -> pd.DataFrame:
         if timeframe not in _TIMEFRAMES:
@@ -207,6 +246,49 @@ class MT5Broker:
                 )
             )
         return out
+
+    def history_deals(
+        self,
+        start: datetime,
+        end: datetime | None = None,
+        symbol: str | None = None,
+        magic: int | None = None,
+    ) -> list[BrokerDeal]:
+        finish = end or datetime.now(timezone.utc)
+        raw = mt5.history_deals_get(start, finish)
+        if raw is None:
+            raise RuntimeError(f"history_deals_get failed: {mt5.last_error()}")
+        buy_type = int(getattr(mt5, "DEAL_TYPE_BUY", 0))
+        sell_type = int(getattr(mt5, "DEAL_TYPE_SELL", 1))
+        out: list[BrokerDeal] = []
+        for deal in raw:
+            deal_symbol = str(getattr(deal, "symbol", "") or "")
+            deal_magic = int(getattr(deal, "magic", 0) or 0)
+            if symbol is not None and deal_symbol != symbol:
+                continue
+            if magic is not None and deal_magic != magic:
+                continue
+            deal_type = int(getattr(deal, "type", -1))
+            side = 1 if deal_type == buy_type else -1 if deal_type == sell_type else 0
+            out.append(
+                BrokerDeal(
+                    ticket=int(getattr(deal, "ticket", 0) or 0),
+                    order=int(getattr(deal, "order", 0) or 0),
+                    position_id=int(getattr(deal, "position_id", 0) or 0),
+                    time_msc=int(getattr(deal, "time_msc", 0) or 0),
+                    symbol=deal_symbol,
+                    side=side,
+                    volume=float(getattr(deal, "volume", 0.0) or 0.0),
+                    price=float(getattr(deal, "price", 0.0) or 0.0),
+                    profit=float(getattr(deal, "profit", 0.0) or 0.0),
+                    commission=float(getattr(deal, "commission", 0.0) or 0.0),
+                    swap=float(getattr(deal, "swap", 0.0) or 0.0),
+                    magic=deal_magic,
+                    comment=str(getattr(deal, "comment", "") or ""),
+                    entry=int(getattr(deal, "entry", -1)),
+                )
+            )
+        return sorted(out, key=lambda item: (item.time_msc, item.ticket))
 
     def _filling_candidates(self, preferred: int) -> list[int]:
         candidates: list[int] = []
