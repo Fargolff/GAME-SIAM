@@ -18,6 +18,19 @@ class LiveConfig:
     enabled: bool = False
     magic: int = 56001
     deviation_points: int = 20
+    risk_per_trade: float = 0.0025
+    max_daily_loss_pct: float = 0.01
+    max_drawdown_pct: float = 0.05
+    max_lot_per_order: float = 0.02
+    max_total_lots: float = 0.05
+    max_open_positions: int = 3
+    max_spread_pips: float = 2.0
+    state_path: str = "runtime/live_state.json"
+    events_path: str = "runtime/live_events.csv"
+    weights_path: str = "results/portfolio/portfolio_weights.csv"
+    candidates_path: str = "results/portfolio/portfolio_candidates.csv"
+    poll_seconds: int = 30
+    history_bars: int = 5000
 
 
 @dataclass(frozen=True)
@@ -71,7 +84,26 @@ def _paper(data: dict[str, Any]) -> PaperRuntimeConfig:
 
 
 def _live(data: dict[str, Any]) -> LiveConfig:
-    return LiveConfig(**(data or {}))
+    cfg = LiveConfig(**(data or {}))
+    if cfg.poll_seconds < 1:
+        raise ValueError("live.poll_seconds must be >= 1")
+    if cfg.history_bars < 100:
+        raise ValueError("live.history_bars must be >= 100")
+    if not 0 < cfg.risk_per_trade < 1:
+        raise ValueError("live.risk_per_trade must be between 0 and 1")
+    if not 0 < cfg.max_daily_loss_pct < 1:
+        raise ValueError("live.max_daily_loss_pct must be between 0 and 1")
+    if not 0 < cfg.max_drawdown_pct < 1:
+        raise ValueError("live.max_drawdown_pct must be between 0 and 1")
+    if cfg.max_lot_per_order <= 0 or cfg.max_total_lots <= 0:
+        raise ValueError("live lot caps must be positive")
+    if cfg.max_lot_per_order > cfg.max_total_lots:
+        raise ValueError("live.max_lot_per_order cannot exceed live.max_total_lots")
+    if cfg.max_open_positions < 1:
+        raise ValueError("live.max_open_positions must be >= 1")
+    if cfg.max_spread_pips <= 0:
+        raise ValueError("live.max_spread_pips must be positive")
+    return cfg
 
 
 def load_config(path: str | Path = "config.yaml") -> AppConfig:
